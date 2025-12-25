@@ -48,3 +48,24 @@ This section reflects the "secure, not private" concept in that, although these 
 <sup>https://support.addigy.com/hc/en-us/articles/4403726652435-Recommended-macOS-Security-Configurations</sup><br/>
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
+
+## 1. NIST Setup
+ > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Avoid using packages to keep dependency tree clean.
+
+Important: NIST Setup does **not** modify any system behavior on its own. It generates a checklist that validates all system settings reflect the selected policy.
+ 1. (Optional) download the provided YAML config
+ 2. Generate the configuration file (there should be a `*.mobileconfig` and a `*compliance.sh` file)
+```
+cd ~/Desktop/macos_security
+
+# Generate consolidated profile, scripts, and profiles
+python3 scripts/generate_guidance.py \
+  -P \
+  -s \
+  -p \
+  build/baselines/cnssi-1253_high-cust.yaml
+```
+ 3. Run the compliance script
+```
+sudo zsh build/cnssi-1253_high-cust/cnssi-1253_high-cust_compliance.sh
+```
