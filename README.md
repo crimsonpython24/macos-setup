@@ -69,3 +69,182 @@ python3 scripts/generate_guidance.py \
 ```
 sudo zsh build/cnssi-1253_high-cust/cnssi-1253_high-cust_compliance.sh
 ```
+
+## 2. ClamAV Setup (MacPorts)
+ 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
+ 2. Give the current user database permissions and substitute "admin" with actual username:
+```
+sudo mkdir -p /opt/local/share/clamav
+sudo chown -R admin:staff /opt/local/share/clamav
+sudo chmod 755 /opt/local/share/clamav
+```
+ 3. Also give logfile permissions:
+```
+sudo chown -R admin:staff /opt/local/var/log/clamav
+sudo chmod -R 755 /opt/local/var/log/clamav
+```
+```
+sudo vi /opt/local/etc/freshclam.conf
+
+# Uncomment
+UpdateLogFile /var/log/freshclam.log
+```
+ 4. The `freshclam` command should work fine now. Lastly, also give the daemon permissions:
+```
+sudo mkdir -p /opt/local/var/run/clamav
+sudo chown -R admin:staff /opt/local/var/run/clamav
+sudo chmod 755 /opt/local/var/run/clamav
+```
+ 5. For MacPorts, it defaults to running in the foreground. Change this line in `/opt/local/etc/freshclam.conf`:
+```
+Foreground no
+```
+ 6. The ClamAV daemon should now run in the background properly with `freshclam -d`
+
+### Running as a Launchd service
+Instead of running `freshclam -d` as a daemon directly, one cna wrap it inside a `launchd` service to trigger it automatically at startup.
+
+ 1. Check if there is an instance running. If there is, kill it:
+```
+admin@Device etc % sudo launchctl list | grep com.personal.freshclam
+-    2    com.personal.freshclam
+admin@Device etc % ps aux | grep freshclam
+admin            53527   0.0  0.0 435300304   1392 s000  S+   12:39AM   0:00.00 grep freshclam
+admin            53360   0.0  0.0 435380864  15440 s000  SN   12:21AM   0:00.09 freshclam -d
+
+sudo kill 53360
+sudo rm /opt/local/var/run/clamav/freshclam.pid
+```
+ 2. Create the daemon file:
+```
+sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
+```
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.freshclam</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/local/bin/freshclam</string>
+        <string>-d</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/freshclam-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/freshclam-stderr.log</string>
+</dict>
+</plist>
+```
+ 3. Reload the daemon
+```
+sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
+```
+ 4. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
+```
+% sudo launchctl list | grep com.personal.freshclam
+53560	0	com.personal.freshclam
+admin@Device etc % ps aux | grep freshclam
+admin            53567   0.0  0.0 435299824   1392 s000  S+   12:46AM   0:00.00 grep freshclam
+_clamav          53560   0.0  0.0 435377360  13280   ??  Ss   12:41AM   0:00.05 /opt/local/bin/freshclam -d
+```
+```
+% sudo launchctl list | grep com.personal.freshclam
+53560	0	com.personal.freshclam
+```
+
+### Setting Up Daily Scans
+ 1. Edit the following file:
+```
+sudo mkdir /usr/local/bin/
+sudo vi /usr/local/bin/clamav-scan.sh
+```
+```
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Auto-detect clamscan location
+CLAMSCAN=""
+for p in \
+  /opt/local/bin/clamscan \
+  /usr/local/bin/clamscan \
+  /opt/homebrew/bin/clamscan
+do
+  if [[ -x "$p" ]]; then
+    CLAMSCAN="$p"
+    break
+  fi
+done
+
+if [[ -z "$CLAMSCAN" ]]; then
+  echo "[!] clamscan not found. Please check your installation path." >&2
+  exit 2
+fi
+
+# Configuration
+LOG_DIR="$HOME/clamav-logs"
+QUARANTINE_DIR="$HOME/quarantine"
+
+# Create directories
+mkdir -p "$LOG_DIR" "$QUARANTINE_DIR"
+
+# If no arguments, default to Downloads
+TARGETS=("${@:-$HOME/Downloads}")
+
+# Scan each target
+for TARGET in "${TARGETS[@]}"; do
+  echo "Scanning: $TARGET"
+  "$CLAMSCAN" -r -i \
+    --move="$QUARANTINE_DIR" \
+    --exclude-dir="\.git" \
+    --exclude-dir="node_modules" \
+    "$TARGET" \
+    -l "$LOG_DIR/scan-$(date +%F).log"
+done
+```
+```
+sudo chmod +x /usr/local/bin/clamav-scan.sh
+```
+ 2. Create LaunchDaemon for daily scans, where the `/Users/admin` array should be the directories to scan:
+```
+sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
+```
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.clamscan</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/usr/local/bin/clamav-scan.sh</string>
+        <string>/Users/admin</string>
+        <string>/Users/warren</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>4</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/var/log/clamscan-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/clamscan-stderr.log</string>
+</dict>
+</plist>
+```
+ 3. Load the daemon
+```
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+```
