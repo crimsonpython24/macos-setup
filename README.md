@@ -102,7 +102,7 @@ Foreground no
  6. The ClamAV daemon should now run in the background properly with `freshclam -d`
 
 ### Running as a Launchd service
-Instead of running `freshclam -d` as a daemon directly, one cna wrap it inside a `launchd` service to trigger it automatically at startup.
+Instead of running `freshclam -d` as a daemon directly, one can wrap it inside a `launchd` service to trigger it automatically at startup.
 
  1. Check if there is an instance running. If there is, kill it:
 ```
@@ -115,7 +115,11 @@ admin            53360   0.0  0.0 435380864  15440 s000  SN   12:21AM   0:00.09 
 sudo kill 53360
 sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
- 2. Create the daemon file:
+ 2. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
+```
+Foreground yes
+```
+ 3. Create the daemon file:
 ```
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -142,12 +146,12 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
- 3. Reload the daemon
+ 4. Reload the daemon
 ```
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 4. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
+ 5. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```
 % sudo launchctl list | grep com.personal.freshclam
 53560	0	com.personal.freshclam
@@ -244,7 +248,52 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 </dict>
 </plist>
 ```
- 3. Load the daemon
+ 3. Load the daemon and give appropriate permissions. Note: the daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
 ```
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo chown -R _clamav:_clamav /opt/local/share/clamav
+sudo chmod 755 /opt/local/share/clamav
 ```
+ 4. Restart the system and check if everything works:
+```
+sudo launchctl list | grep com.personal.freshclam
+
+Expected output:
+12345	0	com.personal.freshclam
+```
+```
+ps aux | grep freshclam
+
+Expected output:
+_clamav          12345   0.0  0.0  ... /opt/local/bin/freshclam -d
+```
+```
+tail -20 /opt/local/var/log/clamav/freshclam.log
+```
+ 5. To restart a service, run either of these depending on the erraneous service:
+```
+sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
+```
+```
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+```
+
+### Cleanup Default MacPorts Services
+Since this guide uses its own launchd services, wrap up this setup by removing the symlinks:
+```
+sudo rm /Library/LaunchDaemons/org.macports.freshclam.plist
+sudo rm /Library/LaunchDaemons/org.macports.clamd.plist
+sudo rm /Library/LaunchDaemons/org.macports.ClamavScanOnAccess.plist
+sudo rm /Library/LaunchDaemons/org.macports.ClamavScanSchedule.plist
+```
+One can also run this line to verify:
+```
+sudo launchctl list | grep org.macports
+```
+If the output is empty, it means that no ClamAV configuration from MacPorts will be automatically loaded, which fits the objective of this section.
+
+<sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
+<sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
+
