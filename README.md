@@ -136,14 +136,14 @@ sudo fdesetup status
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 2. ClamAV Setup (MacPorts)
- 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also no need to give `daemondo` full-disk access.
- 3. Give the current user database permissions and substitute "admin" with actual username:
+ 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also do not give `daemondo` full-disk access because it is unnecessary.
+ 2. Give the current user database permissions and substitute "admin" with actual username:
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R admin:staff /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
- 3. Also configure logfiles and give ClamAV logfile permissions:
+ 3. Also give logfile permissions:
 ```zsh
 sudo chown -R admin:staff /opt/local/var/log/clamav
 sudo chmod -R 755 /opt/local/var/log/clamav
@@ -154,13 +154,11 @@ sudo vi /opt/local/etc/freshclam.conf
 # Uncomment these two
 UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
+DatabaseDirectory /opt/local/share/clamav
 ```
  4. Set up `clamd`:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
-
-# Comment out this line (required when running clamd as another user instead of `_clamav`)
-#User _clamav
 
 # Uncomment
 LocalSocket /opt/local/var/run/clamav/clamd.socket
@@ -172,11 +170,11 @@ DatabaseDirectory /opt/local/share/clamav
  5. Create socket directory and start `clamd`
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
-sudo chown admin:staff /opt/local/var/run/clamav
+sudo chown _clamav:_clamav /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 
 sudo mkdir -p /opt/local/var/log/clamav
-sudo chown admin:staff /opt/local/var/log/clamav
+sudo chown _clamav:_clamav /opt/local/var/log/clamav
 sudo chmod 755 /opt/local/var/log/clamav
 ```
  6. Create daemon:
@@ -194,10 +192,6 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
     <array>
         <string>/opt/local/sbin/clamd</string>
     </array>
-    <key>UserName</key>
-    <string>admin</string>
-    <key>GroupName</key>
-    <string>staff</string>
     <key>KeepAlive</key>
     <true/>
     <key>RunAtLoad</key>
@@ -213,13 +207,13 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 
-# Append to end
+# Add to the end
 ExcludePath ^/.*\.git
 ExcludePath ^/.*/node_modules
 ExcludePath ^/.*/Library/Caches
 ExcludePath ^/.*\.Trash
 ```
- 8. Create scan script:
+ 8. Update the scan script:
 ```zsh
 sudo mkdir /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
@@ -286,30 +280,26 @@ else
   done
 fi
 ```
- 9. Also give the daemon similar permissions:
+ 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). Next, also give the daemon similar permissions:
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R admin:staff /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
- 10. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). 
- 11. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
+ 10. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
 ```conf
 Foreground no
 ```
- 12. The ClamAV daemon should now run in the background properly with `freshclam -d`
- 13. Load the clamd daemon and verify it's working:
+ 11. The ClamAV daemon should now run in the background properly with `freshclam -d`
+ 12. Restart the computer, go to "System Preferences> Security & Privacy> Full Disk Access" and give MacPorts process "daemondo" FDA.
+ 13. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
 ```zsh
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
-sudo launchctl list | grep com.personal.clamd
+sudo launchctl list | grep com.personal
 # Expected output:
-# PID    STATUS  LABEL
-# 1234   0       com.personal.clamd
-
-ps aux | grep clamd
-# Expected output (note it runs as admin user):
-# admin          1234   0.0  0.0  ... /opt/local/sbin/clamd
+# 2993	0	com.personal.clamd
 
 ls -la /opt/local/var/run/clamav/clamd.socket
 clamdscan --version
@@ -329,7 +319,7 @@ Instead of running `freshclam -d` as a daemon directly, one can wrap it inside a
 
  1. Check if there is an instance running. If there is, kill it:
 ```zsh
-admin@Device etc % sudo launchctl list | grep com.personal.freshclam
+sudo launchctl list | grep com.personal.freshclam
 -    2    com.personal.freshclam
 admin@Device etc % ps aux | grep freshclam
 admin            53527   0.0  0.0 435300304   1392 s000  S+   12:39AM   0:00.00 grep freshclam
@@ -377,16 +367,15 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
  5. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
-543	0	com.personal.freshclam
+# 3030	0	com.personal.freshclam
 
 sudo launchctl list | grep com.personal          
-541	0	com.personal.clamd
-543	0	com.personal.freshclam
--	0	com.personal.clamscan
+# 2993	0	com.personal.clamd
+# 3030	0	com.personal.freshclam
 
 ps aux | grep freshclam
-_clamav            543   0.0  0.1 435418912  21968   ??  Ss    7:02PM   0:00.24 /opt/local/bin/freshclam -d
-admin             1019   0.0  0.0 435300272   1392 s000  S+    7:05PM   0:00.01 grep freshclam
+# admin             3042   0.0  0.0 435299440   1376 s000  S+   11:53PM   0:00.00 grep freshclam
+# _clamav           3030   0.0  0.0 435376560  13088   ??  Ss   11:52PM   0:00.04 /opt/local/bin/freshclam -d
 ```
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
@@ -427,33 +416,20 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 </dict>
 </plist>
 ```
- 3. Load the daemon and give appropriate permissions.
+ 3. Load the daemon and give appropriate permissions. The daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo chown -R admin:staff /opt/local/share/clamav
+sudo chown -R _clamav:_clamav /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
-
-sudo mkdir -p /var/log
-sudo mkdir -p /opt/local/var/log/clamav
-sudo mkdir -p /opt/local/var/run/clamav
-
-sudo chown admin:staff /opt/local/var/log/clamav
-sudo chown admin:staff /opt/local/var/run/clamav
-sudo chown admin:staff /var/log/clamd-stdout.log 2>/dev/null || sudo touch /var/log/clamd-stdout.log && sudo chown admin:staff /var/log/clamd-stdout.log
-sudo chown admin:staff /var/log/clamd-stderr.log 2>/dev/null || sudo touch /var/log/clamd-stderr.log && sudo chown admin:staff /var/log/clamd-stderr.log
-
-sudo chmod 755 /opt/local/var/log/clamav
-sudo chmod 755 /opt/local/var/run/clamav
-sudo chmod 644 /var/log/clamd-*.log 2>/dev/null || true
 ```
  4. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
-543	0	com.personal.freshclam
+# 3030	0	com.personal.freshclam
 
 ps aux | grep freshclam
-_clamav            543   0.0  0.1 435418912  21968   ??  Ss    7:02PM   0:00.24 /opt/local/bin/freshclam -d
-admin             1036   0.0  0.0 435300240   1392 s000  S+    7:07PM   0:00.00 grep freshclam
+# admin             3073   0.0  0.0 435300448   1376 s000  S+   11:54PM   0:00.00 grep freshclam
+# _clamav           3030   0.0  0.0 435376560  13088   ??  Ss   11:52PM   0:00.04 /opt/local/bin/freshclam -d
 ```
 ```zsh
 sudo tail -20 /opt/local/var/log/clamav/freshclam.log
@@ -581,7 +557,7 @@ echo "There are new items for review in $HOME/quarantine" | mail -s "URGENT! Cla
 ```
 
 ### (Optional) Implementing On-Access Scanning
- > There isn't an official on-access scanning (only on linux) because it requires the Linux `fanotify` kernel API (kernel version ≥ 3.8) to block file access at the kernel level. On macOS, we simulate on-access scanning using `fswatch` which provides real-time detection but operates in notify-only mode (cannot prevent file access, only detect and alert).
+ > There isn't an official on-access scanning (only on linux) because it requires the Linux `fanotify` kernel API (kernel version ≥ 3.8) to block file access at the kernel level.
 
  1. Install `fswatch`:
 ```zsh
@@ -589,9 +565,6 @@ sudo port install fswatch
 ```
  2. Create the on-access scan script:
 ```zsh
-sudo vi /usr/local/bin/clamav-onaccess.sh
-```
-```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -641,7 +614,7 @@ Delete this file immediately.\" buttons {\"Open Finder\", \"OK\"} default button
       osascript -e "display notification \"VIRUS FOUND: $(basename "$file") - Please delete immediately!\" with title \"ClamAV Alert\" sound name \"Basso\"" 2>/dev/null || true
       
       # Send email alert
-      echo "ClamAV detected a virus on Mac
+      echo "ClamAV detected a virus on Mac"
 
 File: $file
 Virus: $virus_name
@@ -674,10 +647,9 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring: ${WATCH_DIRS[*]}" >> "$LOG_FILE
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-onaccess.sh
 ```
- 3. Create LaunchAgent to run as own user (runs as your user because clamd runs as admin and can access your files):
+ 3. Create LaunchAgent to run as own user (1. ClamAV runs as the `_clamav` user, so it does not make sense to run the script as root, and 2. `fswatch` is not kernel-level, so giving it privilege escalation does not do anything).
 ```zsh
 vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-```
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -701,7 +673,7 @@ vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 </plist>
 ```
  4. Load the LaunchAgent (note: this command should only show the on-access script because it is not ran as `sudo`).
-```zsh
+```
 launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 launchctl list | grep clamav-onaccess
 ps aux | grep fswatch
@@ -719,141 +691,12 @@ tail -f ~/clamav-logs/onaccess-$(date +%F).log
 cd ~/Downloads
 curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
 ```
-Expected output in log:
-```
-[2025-12-26 XX:XX:XX] Scanning: /Users/admin/Downloads/eicar-test.txt
-[2025-12-26 XX:XX:XX] INFECTED: /Users/admin/Downloads/eicar-test.txt
-[2025-12-26 XX:XX:XX] Virus: Eicar-Test-Signature
-[2025-12-26 XX:XX:XX] Alerts sent (email + notification)
-```
-You should also see a macOS popup dialog and notification, plus receive an email alert.
  7. Also run a clean file. The log should show that ClamAV scanned the file, but it did not take any actions.
 ```zsh
 echo "This is a normal file" > ~/Downloads/test.txt
 ```
 
 > Why tf did I just implement an AV for mac from binaries?
-
-### Sanity Checks After Reboot
-After restarting your system, verify all services are running correctly:
-
- 1. Check all LaunchDaemons and LaunchAgents:
-```zsh
-sudo launchctl list | grep com.personal
-# Expected output:
-# PID    STATUS  LABEL
-# 541    0       com.personal.clamd
-# 543    0       com.personal.freshclam
-# -      0       com.personal.clamscan
-# -      0       com.personal.clammail
-
-launchctl list | grep com.personal
-# Expected output:
-# PID    STATUS  LABEL
-# 789    0       com.personal.clamav-onaccess
-```
-
- 2. Verify processes are running:
-```zsh
-ps aux | grep -E 'clamd|freshclam|fswatch' | grep -v grep
-# Expected output should show:
-# admin          541   ... /opt/local/sbin/clamd
-# _clamav        543   ... /opt/local/bin/freshclam -d
-# admin          789   ... /opt/local/bin/fswatch ...
-```
-
- 3. Check critical files and sockets exist:
-```zsh
-ls -la /opt/local/var/run/clamav/
-# Should show:
-# clamd.socket
-# clamd.pid
-# freshclam.pid
-
-ls -la /opt/local/share/clamav/ | head -5
-# Should show virus database files like:
-# bytecode.cvd
-# daily.cvd
-# main.cvd
-```
-
- 4. Verify clamd is responsive:
-```zsh
-clamdscan --version
-# Should show version info without errors
-
-echo "test" > /tmp/test.txt
-clamdscan /tmp/test.txt
-# Should show: /tmp/test.txt: OK
-rm /tmp/test.txt
-```
-
- 5. Check log files for errors:
-```zsh
-sudo tail -20 /opt/local/var/log/clamav/freshclam.log
-# Should show recent successful database updates
-
-sudo tail -20 /opt/local/var/log/clamav/clamd.log
-# Should show clamd started successfully
-
-tail -20 ~/clamav-logs/onaccess-$(date +%F).log
-# Should show "On-Access Scanner Started"
-```
-
- 6. Test on-access scanning is working:
-```zsh
-# Watch the log in one terminal
-tail -f ~/clamav-logs/onaccess-$(date +%F).log
-
-# In another terminal, create a test file
-echo "test file" > ~/Downloads/sanity-check.txt
-# Log should immediately show it was scanned and is clean
-rm ~/Downloads/sanity-check.txt
-```
-
- 7. Verify postfix is ready (if email notifications configured):
-```zsh
-sudo postfix status
-# Should show: postfix is running
-
-mailq
-# Should show: Mail queue is empty
-```
-
- 8. Test EICAR detection end-to-end:
-```zsh
-# Download EICAR test file
-curl -L -o ~/Downloads/eicar-final-test.txt https://secure.eicar.org/eicar.com.txt
-
-# Within seconds, you should:
-# - See a macOS popup dialog about virus detection
-# - Receive an email alert
-# - See detection in the on-access log
-
-# Verify in log
-tail -20 ~/clamav-logs/onaccess-$(date +%F).log
-# Should show INFECTED and alerts sent
-
-# Clean up
-rm ~/Downloads/eicar-final-test.txt 2>/dev/null || true
-```
-
- 9. Summary check - all services status:
-```zsh
-echo "=== ClamAV Service Status ==="
-echo ""
-echo "LaunchDaemons (system-wide):"
-sudo launchctl list | grep com.personal | awk '{print $3 ": " ($2 == 0 ? "✓" : "✗")}'
-echo ""
-echo "LaunchAgents (user-level):"
-launchctl list | grep com.personal | awk '{print $3 ": " ($2 == 0 ? "✓" : "✗")}'
-echo ""
-echo "clamd socket:"
-[[ -S /opt/local/var/run/clamav/clamd.socket ]] && echo "✓ Present" || echo "✗ Missing"
-echo ""
-echo "Virus database:"
-[[ -f /opt/local/share/clamav/daily.cvd ]] && echo "✓ Present" || echo "✗ Missing"
-```
 
 ### Clean Up Default MacPorts Services
 Since this guide uses its own launchd services, wrap up this setup by removing the symlinks:
