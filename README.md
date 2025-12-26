@@ -52,7 +52,7 @@ This section reflects the "secure, not private" concept in that, although these 
 ## 1. NIST Setup
  > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Avoid using packages to keep dependency tree clean.
 
-Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates the system reflects the selected policy, and a configuration profile that implements the changes.
+Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
 
  > Unless otherwise specified, all commands here should be ran at the project base.
 
@@ -78,41 +78,48 @@ mkdir baselines
 cd baselines
 vi cnssi-1253_cust.yaml
 
-python3 scripts/generate_guidance.py -P -s -p build/baselines/cnssi-1253_cust.yaml
+python3 scripts/generate_guidance.py \
+        -P \
+        -s \
+        -p \
+        build/baselines/cnssi-1253_cust.yaml
 ```
- 3. Run the compliance script.
+ 3. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 4. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile (one might have to open the Settings app to finish installation):
+ 4. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile (one might have to open the Settings app to install the profile):
 ```zsh
 cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
 ```
  5. Optional: Load custom ODV values
 ```zsh
+cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
+odv:
+  custom: 12
+EOF
+
 cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
 odv:
   custom: 5
 EOF
-```
-```zsh
+
 cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
 odv:
   custom: 0
 EOF
 ```
- 6. Remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
- 7. Run the compliance script again (steps 3 and 4) with options 2, and then 1. This step should yield ~80% compliance. Now run option 3 and go through all scripts (select `y` for all settings) to cover settings not covered within the configuration profile.
- 8. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
- 9. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these four:
+ 6. If custom ODV values are loaded, remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
+ 7. Run the compliance script again (steps 3 and 4) with options 2, and then 1 in this order. The script should now yield ~80% compliance.
+ 8. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile.
+ 9. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
+ 10. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
-os_external_storage_access_defined
 os_firewall_default_deny_require
 system_settings_filevault_enforce
-system_settings_security_update_install
 ```
- 10. Go inside Settings and manually toggle these four options. After this step, the script should yield 100% compliance. Restart the device.
+ 10. Go inside Settings and manually toggle these four options. The script might not yield 100% compliance, but all settings should be applied. Restart the device.
 
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
