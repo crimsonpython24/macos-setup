@@ -167,7 +167,7 @@ Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
 ```
- 5. Create socket directory and start `clamd`
+ 5. Create socket directories:
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown _clamav:_clamav /opt/local/var/run/clamav
@@ -192,6 +192,10 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
     <array>
         <string>/opt/local/sbin/clamd</string>
     </array>
+    <key>UserName</key>
+    <string>admin</string>
+    <key>GroupName</key>
+    <string>staff</string>
     <key>KeepAlive</key>
     <true/>
     <key>RunAtLoad</key>
@@ -326,6 +330,9 @@ admin            53527   0.0  0.0 435300304   1392 s000  S+   12:39AM   0:00.00 
 admin            53360   0.0  0.0 435380864  15440 s000  SN   12:21AM   0:00.09 freshclam -d
 
 sudo kill 53360
+```
+ 2. Always run this step to ensure cleanup from the previous section.
+```zsh
 sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
  2. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
@@ -539,7 +546,7 @@ sudo postmap /etc/postfix/sasl_passwd
 sudo postfix start
 sudo postfix reload
 ```
- 6. If there is a failed queue from previous steps, run this command to clear the queue.
+ 6. If there is a failed queue from previous steps, run this command to clear the queue. Also check queue status with `mailq`.
 ```zsh
 sudo postsuper -d ALL
 ```
@@ -565,6 +572,8 @@ sudo port install fswatch
 ```
  2. Create the on-access scan script:
 ```zsh
+sudo vi /usr/local/bin/clamav-onaccess.sh
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -614,7 +623,7 @@ Delete this file immediately.\" buttons {\"Open Finder\", \"OK\"} default button
       osascript -e "display notification \"VIRUS FOUND: $(basename "$file") - Please delete immediately!\" with title \"ClamAV Alert\" sound name \"Basso\"" 2>/dev/null || true
       
       # Send email alert
-      echo "ClamAV detected a virus on Mac"
+      echo "ClamAV detected a virus on Mac
 
 File: $file
 Virus: $virus_name
@@ -649,6 +658,7 @@ sudo chmod +x /usr/local/bin/clamav-onaccess.sh
 ```
  3. Create LaunchAgent to run as own user (1. ClamAV runs as the `_clamav` user, so it does not make sense to run the script as root, and 2. `fswatch` is not kernel-level, so giving it privilege escalation does not do anything).
 ```zsh
+sudo mkdir ~/Library/LaunchAgents/
 vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
