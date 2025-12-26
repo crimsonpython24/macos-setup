@@ -130,6 +130,8 @@ sudo pfctl -s info
 ```
  12. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
 
+**Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
+
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
  2. Give the current user database permissions and substitute "admin" with actual username:
