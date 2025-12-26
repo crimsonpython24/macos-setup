@@ -138,30 +138,33 @@ sudo fdesetup status
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
  2. Give the current user database permissions and substitute "admin" with actual username:
-```
+```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R admin:staff /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
  3. Also give logfile permissions:
-```
+```zsh
 sudo chown -R admin:staff /opt/local/var/log/clamav
 sudo chmod -R 755 /opt/local/var/log/clamav
 ```
-```
+```zsh
 sudo vi /opt/local/etc/freshclam.conf
 
 # Uncomment
 UpdateLogFile /var/log/freshclam.log
+
+# Add this line to notify clamd when databases are updated
+NotifyClamd /opt/local/etc/clamd.conf
 ```
  4. The `freshclam` command should work fine now. Lastly, also give the daemon permissions:
-```
+```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R admin:staff /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
- 5. For MacPorts, it defaults to running in the foreground. Change this line in `/opt/local/etc/freshclam.conf`:
-```
+ 5. For MacPorts, it defaults to running in the foreground. Change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
+```conf
 Foreground no
 ```
  6. The ClamAV daemon should now run in the background properly with `freshclam -d`
@@ -170,7 +173,7 @@ Foreground no
 Instead of running `freshclam -d` as a daemon directly, one can wrap it inside a `launchd` service to trigger it automatically at startup.
 
  1. Check if there is an instance running. If there is, kill it:
-```
+```zsh
 admin@Device etc % sudo launchctl list | grep com.personal.freshclam
 -    2    com.personal.freshclam
 admin@Device etc % ps aux | grep freshclam
@@ -181,14 +184,14 @@ sudo kill 53360
 sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
  2. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
-```
+```conf
 Foreground yes
 ```
  3. Create the daemon file:
-```
+```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
-```
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -212,30 +215,31 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </plist>
 ```
  4. Reload the daemon
-```
+```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
  5. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
-```
-% sudo launchctl list | grep com.personal.freshclam
+```zsh
+sudo launchctl list | grep com.personal.freshclam
 53560	0	com.personal.freshclam
 admin@Device etc % ps aux | grep freshclam
 admin            53567   0.0  0.0 435299824   1392 s000  S+   12:46AM   0:00.00 grep freshclam
 _clamav          53560   0.0  0.0 435377360  13280   ??  Ss   12:41AM   0:00.05 /opt/local/bin/freshclam -d
 ```
-```
-% sudo launchctl list | grep com.personal.freshclam
+```zsh
+sudo launchctl list | grep com.personal.freshclam
 53560	0	com.personal.freshclam
 ```
+**Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
 ### Setting Up Daily Scans
  1. Edit the following file:
-```
+```zsh
 sudo mkdir /usr/local/bin/
 sudo vi /usr/local/bin/clamav-scan.sh
 ```
-```
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -274,18 +278,20 @@ for TARGET in "${TARGETS[@]}"; do
     --move="$QUARANTINE_DIR" \
     --exclude-dir="\.git" \
     --exclude-dir="node_modules" \
+    --exclude-dir="Library/Caches" \
+    --exclude-dir="\.Trash" \
     "$TARGET" \
     -l "$LOG_DIR/scan-$(date +%F).log"
 done
 ```
-```
+```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
  2. Create LaunchDaemon for daily scans, where the `/Users/admin` array should be the directories to scan:
-```
+```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
-```
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -313,48 +319,161 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 </dict>
 </plist>
 ```
- 3. Load the daemon and give appropriate permissions. Note: the daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
-```
+ 3. Load the daemon and give appropriate permissions. The daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
+```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo chown -R _clamav:_clamav /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
- 4. Restart the system and check if everything works:
-```
+ 4. Restart the system, and after reboot, check if everything works:
+```zsh
 sudo launchctl list | grep com.personal.freshclam
 
-Expected output:
+# Expected output:
 12345	0	com.personal.freshclam
 ```
-```
+```zsh
 ps aux | grep freshclam
 
-Expected output:
+# Expected output:
 _clamav          12345   0.0  0.0  ... /opt/local/bin/freshclam -d
 ```
-```
+```zsh
 tail -20 /opt/local/var/log/clamav/freshclam.log
 ```
  5. To restart a service, run either of these depending on the erraneous service:
-```
+```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
-```
+```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
 
+### Testing with EICAR
+Verify that ClamAV is working correctly by testing with the EICAR test file (a harmless file designed to test antivirus software):
+
+```zsh
+mkdir -p ~/clamav-test && cd ~/clamav-test
+curl -L -o eicar.com.txt https://secure.eicar.org/eicar.com.txt
+clamscan -i eicar.com.txt
+rm -f eicar.com.txt
+
+# Should see output similar to "eicar.com.txt: Eicar-Test-Signature FOUND"
+```
+This confirms that ClamAV can detect threats. The EICAR file is not an actual virus, it's a standard test file recognized by all antivirus software.
+
+### Email Notifications (Optional)
+Set up email alerts when infections are found in the quarantine directory.
+ 1. Create the email notification script:
+```zsh
+mkdir -p ~/scripts
+vi ~/scripts/clam-mail
+```
+```bash
+#!/bin/bash
+echo "There are new items for review in $HOME/quarantine" | mail -s "URGENT! Clamscan Found Infections!" root
+```
+```zsh
+chmod +x ~/scripts/clam-mail
+```
+ 2. Create the LaunchDaemon that watches the quarantine directory:
+```zsh
+sudo vi /Library/LaunchDaemons/com.personal.clammail.plist
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.clammail</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/admin/scripts/clam-mail</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/admin/quarantine</string>
+    </array>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/var/log/clammail.stderr</string>
+</dict>
+</plist>
+```
+ 3. Load the notification daemon
+```zsh
+sudo launchctl load /Library/LaunchDaemons/com.personal.clammail.plist
+```
+ 4. Test it. This requires a working mail system on macOS (e.g., via postfix, see next section).
+```zsh
+touch ~/quarantine/test.txt
+```
+
+### (Optional) Postfix Configuration
+ 1. Create SASL Password File
+```zsh
+sudo vi /etc/postfix/sasl_passwd
+
+# Add
+[smtp.gmail.com]:587 yjwarrenwang@gmail.com:YOUR_APP_PASSWORD_HERE
+```
+ 2. To generate a Gmail App Password:
+  - Go to https://myaccount.google.com/security
+  - Enable 2-Step Verification if not already enabled
+  - Search for "App passwords"
+  - Generate a new app password for "Mail"
+  - Use that 16-character password in the file above
+ 3. Secure and hash password file:
+```zsh
+sudo chmod 600 /etc/postfix/sasl_passwd
+sudo postmap /etc/postfix/sasl_passwd
+```
+ 4. Configure postfix
+```zsh
+sudo vi /etc/postfix/main.cf
+
+# Add these lines at the end:
+relayhost = [smtp.gmail.com]:587
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_sasl_mechanism_filter = plain
+smtp_use_tls = yes
+smtp_tls_security_level = encrypt
+smtp_tls_CAfile = /etc/ssl/cert.pem
+```
+ 5. Start postfix
+```zsh
+sudo postfix start
+sudo postfix reload
+```
+ 6. Send a test email and check Gmail inbox
+```zsh
+echo "Test email from ClamAV" | mail -s "Test Subject" yjwarrenwang@gmail.com
+```
+ 7. Edit the notification script to use actual email:
+```zsh
+vi ~/scripts/clam-mail
+```
+```bash
+#!/bin/bash
+echo "There are new items for review in $HOME/quarantine" | mail -s "URGENT! Clamscan Found Infections!" yjwarrenwang@gmail.com
+```
+
 ### Cleanup Default MacPorts Services
 Since this guide uses its own launchd services, wrap up this setup by removing the symlinks:
-```
+```zsh
 sudo rm /Library/LaunchDaemons/org.macports.freshclam.plist
 sudo rm /Library/LaunchDaemons/org.macports.clamd.plist
 sudo rm /Library/LaunchDaemons/org.macports.ClamavScanOnAccess.plist
 sudo rm /Library/LaunchDaemons/org.macports.ClamavScanSchedule.plist
 ```
 One can also run this line to verify:
-```
+```zsh
 sudo launchctl list | grep org.macports
 ```
 If the output is empty, it means that no ClamAV configuration from MacPorts will be automatically loaded, which fits the objective of this section.
