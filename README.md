@@ -82,18 +82,18 @@ python3 scripts/generate_guidance.py \
         -P \
         -s \
         -p \
-        build/baselines/cnssi-1253_cust.yaml
+    build/baselines/cnssi-1253_cust.yaml
 ```
- 3. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
+ 4. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 4. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile (one might have to open the Settings app to install the profile):
+ 5. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile if no custom ODVs are applied (one might have to open the Settings app to install the profile):
 ```zsh
 cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
 ```
- 5. Optional: Load custom ODV values
+ 6. Optional: Load custom ODV values
 ```zsh
 cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
 odv:
@@ -119,7 +119,7 @@ EOF
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 10. Go inside Settings and manually toggle these four options. The script might not yield 100% compliance, but all settings should be applied. Restart the device.
+ 11. Go inside Settings and manually toggle these two options. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
 
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
