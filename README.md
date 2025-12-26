@@ -136,7 +136,7 @@ sudo fdesetup status
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 2. ClamAV Setup (MacPorts)
- 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
+ 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts
  2. Give the current user database permissions and substitute "admin" with actual username:
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
@@ -151,23 +151,168 @@ sudo chmod -R 755 /opt/local/var/log/clamav
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
 
-# Uncomment
+# Uncomment these two
 UpdateLogFile /var/log/freshclam.log
-
-# Add this line to notify clamd when databases are updated
 NotifyClamd /opt/local/etc/clamd.conf
 ```
- 4. The `freshclam` command should work fine now. Lastly, also give the daemon permissions:
+ 4. Set up `clamd`:
+```conf
+# Uncomment
+LocalSocket /opt/local/var/run/clamav/clamd.socket
+PidFile /opt/local/var/run/clamav/clamd.pid
+Foreground yes
+LogFile /opt/local/var/log/clamav/clamd.log
+DatabaseDirectory /opt/local/share/clamav
+```
+ 5. Create socket directory and start `clamd`
+```zsh
+sudo mkdir -p /opt/local/var/run/clamav
+sudo chown _clamav:_clamav /opt/local/var/run/clamav
+sudo chmod 755 /opt/local/var/run/clamav
+
+sudo mkdir -p /opt/local/var/log/clamav
+sudo chown _clamav:_clamav /opt/local/var/log/clamav
+sudo chmod 755 /opt/local/var/log/clamav
+```
+ 6. Create daemon:
+```zsh
+sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.clamd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/local/sbin/clamd</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/clamd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/clamd-stderr.log</string>
+</dict>
+</plist>
+```
+ 7. (Optional) Now that `clamd` is configured, use `clamdscan` over `clamscan` for better performance:
+```zsh
+sudo vi /opt/local/etc/clamd.conf
+
+# Add to the end
+ExcludePath ^/.*\.git
+ExcludePath ^/.*/node_modules
+ExcludePath ^/.*/Library/Caches
+ExcludePath ^/.*\.Trash
+```
+ 8. (Optional with step 7) Update the scan script:
+```
+sudo vi /usr/local/bin/clamav-scan.sh
+```
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+LOG_DIR="$HOME/clamav-logs"
+QUARANTINE_DIR="$HOME/quarantine"
+
+# Create directories
+mkdir -p "$LOG_DIR" "$QUARANTINE_DIR"
+
+# If no arguments, default to Downloads
+TARGETS=("${@:-$HOME/Downloads}")
+
+# Check if clamd is running
+if [[ -S /opt/local/var/run/clamav/clamd.socket ]]; then
+  # Use clamdscan (faster, multi-threaded)
+  SCANNER="/opt/local/bin/clamdscan"
+  echo "Using clamdscan (daemon mode - faster)"
+  
+  for TARGET in "${TARGETS[@]}"; do
+    echo "Scanning: $TARGET"
+    "$SCANNER" --multiscan -i \
+      --move="$QUARANTINE_DIR" \
+      "$TARGET" \
+      -l "$LOG_DIR/scan-$(date +%F).log"
+  done
+else
+  # Fall back to clamscan
+  echo "clamd not running, using clamscan (slower)"
+  
+  # Auto-detect clamscan location
+  CLAMSCAN=""
+  for p in \
+    /opt/local/bin/clamscan \
+    /usr/local/bin/clamscan \
+    /opt/homebrew/bin/clamscan
+  do
+    if [[ -x "$p" ]]; then
+      CLAMSCAN="$p"
+      break
+    fi
+  done
+  
+  if [[ -z "$CLAMSCAN" ]]; then
+    echo "[!] clamscan not found. Please check your installation path." >&2
+    exit 2
+  fi
+  
+  for TARGET in "${TARGETS[@]}"; do
+    echo "Scanning: $TARGET"
+    "$CLAMSCAN" -r -i \
+      --move="$QUARANTINE_DIR" \
+      --exclude-dir="\.git" \
+      --exclude-dir="node_modules" \
+      --exclude-dir="Library/Caches" \
+      --exclude-dir="\.Trash" \
+      "$TARGET" \
+      -l "$LOG_DIR/scan-$(date +%F).log"
+  done
+fi
+```
+ 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). Next, also give the daemon similar permissions:
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R admin:staff /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
- 5. For MacPorts, it defaults to running in the foreground. Change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
+ 10. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
 ```conf
 Foreground no
 ```
- 6. The ClamAV daemon should now run in the background properly with `freshclam -d`
+ 11. The ClamAV daemon should now run in the background properly with `freshclam -d`
+ 12. Restart the computer, go to "System Preferences> Security & Privacy> Full Disk Access" and give MacPorts process "daemondo" FDA.
+ 13. Check if everything is working so far:
+```zsh
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
+
+sudo launchctl list | grep com.personal
+
+# Expected output:
+# PID    STATUS  LABEL
+# 1234   0       com.personal.freshclam
+# 5678   0       com.personal.clamd
+# -      0       com.personal.clamscan
+
+ls -la /opt/local/var/run/clamav/clamd.socket
+clamdscan --version
+```
+
+**Note** Manual scan commands:
+```zsh
+clamdscan --multiscan -i ~/Downloads
+clamdscan --multiscan -i --move=~/quarantine ~/Downloads
+clamscan -r -i ~/Downloads
+```
+
+**Note** this guide does not use MacPorts' default scripts because the scripts here bundle launch services, daemons, etc. that are not included in the shipped scripts otherwise. I.e., the "startup items" will not run themselves, and manually toggling them to do so might collide with the automatic mechanisms in this guide.
 
 ### Running as a Launchd service
 Instead of running `freshclam -d` as a daemon directly, one can wrap it inside a `launchd` service to trigger it automatically at startup.
@@ -357,7 +502,7 @@ Verify that ClamAV is working correctly by testing with the EICAR test file (a h
 ```zsh
 mkdir -p ~/clamav-test && cd ~/clamav-test
 curl -L -o eicar.com.txt https://secure.eicar.org/eicar.com.txt
-clamscan -i eicar.com.txt
+clamdscan -i eicar.com.txt
 rm -f eicar.com.txt
 
 # Should see output similar to "eicar.com.txt: Eicar-Test-Signature FOUND"
