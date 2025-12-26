@@ -156,7 +156,9 @@ UpdateLogFile /var/log/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 ```
  4. Set up `clamd`:
-```conf
+```zsh
+sudo vi /opt/local/etc/clamd.conf
+
 # Uncomment
 LocalSocket /opt/local/var/run/clamav/clamd.socket
 PidFile /opt/local/var/run/clamav/clamd.pid
@@ -211,7 +213,8 @@ ExcludePath ^/.*/Library/Caches
 ExcludePath ^/.*\.Trash
 ```
  8. (Optional with step 7) Update the scan script:
-```
+```zsh
+sudo mkdir /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
 ```
 ```bash
@@ -288,13 +291,12 @@ Foreground no
 ```
  11. The ClamAV daemon should now run in the background properly with `freshclam -d`
  12. Restart the computer, go to "System Preferences> Security & Privacy> Full Disk Access" and give MacPorts process "daemondo" FDA.
- 13. Check if everything is working so far:
+ 13. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
 sudo launchctl list | grep com.personal
-
 # Expected output:
 # PID    STATUS  LABEL
 # 1234   0       com.personal.freshclam
@@ -312,7 +314,7 @@ clamdscan --multiscan -i --move=~/quarantine ~/Downloads
 clamscan -r -i ~/Downloads
 ```
 
-**Note** this guide does not use MacPorts' default scripts because the scripts here bundle launch services, daemons, etc. that are not included in the shipped scripts otherwise. I.e., the "startup items" will not run themselves, and manually toggling them to do so might collide with the automatic mechanisms in this guide.
+**Note** this guide does not use MacPorts' default scripts because the scripts in this guide bundle launch services, daemons, etc. that are not included in the shipped scripts otherwise. I.e., the "startup items" will not run scan themselves but only vibe in the background, and manually toggling them to do start might collide with the automatic mechanisms in this guide.
 
 ### Running as a Launchd service
 Instead of running `freshclam -d` as a daemon directly, one can wrap it inside a `launchd` service to trigger it automatically at startup.
@@ -329,7 +331,7 @@ sudo kill 53360
 sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
  2. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
-```conf
+```zsh
 Foreground yes
 ```
  3. Create the daemon file:
@@ -359,7 +361,7 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
- 4. Reload the daemon
+ 4. Reload the daemon (unload may throw error if this is the first time running the daemon):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
@@ -379,56 +381,7 @@ sudo launchctl list | grep com.personal.freshclam
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
 ### Setting Up Daily Scans
- 1. Edit the following file:
-```zsh
-sudo mkdir /usr/local/bin/
-sudo vi /usr/local/bin/clamav-scan.sh
-```
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Auto-detect clamscan location
-CLAMSCAN=""
-for p in \
-  /opt/local/bin/clamscan \
-  /usr/local/bin/clamscan \
-  /opt/homebrew/bin/clamscan
-do
-  if [[ -x "$p" ]]; then
-    CLAMSCAN="$p"
-    break
-  fi
-done
-
-if [[ -z "$CLAMSCAN" ]]; then
-  echo "[!] clamscan not found. Please check your installation path." >&2
-  exit 2
-fi
-
-# Configuration
-LOG_DIR="$HOME/clamav-logs"
-QUARANTINE_DIR="$HOME/quarantine"
-
-# Create directories
-mkdir -p "$LOG_DIR" "$QUARANTINE_DIR"
-
-# If no arguments, default to Downloads
-TARGETS=("${@:-$HOME/Downloads}")
-
-# Scan each target
-for TARGET in "${TARGETS[@]}"; do
-  echo "Scanning: $TARGET"
-  "$CLAMSCAN" -r -i \
-    --move="$QUARANTINE_DIR" \
-    --exclude-dir="\.git" \
-    --exclude-dir="node_modules" \
-    --exclude-dir="Library/Caches" \
-    --exclude-dir="\.Trash" \
-    "$TARGET" \
-    -l "$LOG_DIR/scan-$(date +%F).log"
-done
-```
+ 1. Using the scan file in the first section, make it executable instead of being a placeholder:
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
