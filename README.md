@@ -202,7 +202,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 </dict>
 </plist>
 ```
- 7. (Optional) Now that `clamd` is configured, use `clamdscan` over `clamscan` for better performance:
+ 7. Now that `clamd` is configured, use `clamdscan` over `clamscan` for better performance:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 
@@ -212,7 +212,7 @@ ExcludePath ^/.*/node_modules
 ExcludePath ^/.*/Library/Caches
 ExcludePath ^/.*\.Trash
 ```
- 8. (Optional with step 7) Update the scan script:
+ 8. Update the scan script:
 ```zsh
 sudo mkdir /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
@@ -369,14 +369,16 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
  5. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
-53560	0	com.personal.freshclam
-admin@Device etc % ps aux | grep freshclam
-admin            53567   0.0  0.0 435299824   1392 s000  S+   12:46AM   0:00.00 grep freshclam
-_clamav          53560   0.0  0.0 435377360  13280   ??  Ss   12:41AM   0:00.05 /opt/local/bin/freshclam -d
-```
-```zsh
-sudo launchctl list | grep com.personal.freshclam
-53560	0	com.personal.freshclam
+543	0	com.personal.freshclam
+
+sudo launchctl list | grep com.personal          
+541	0	com.personal.clamd
+543	0	com.personal.freshclam
+-	0	com.personal.clamscan
+
+ps aux | grep freshclam
+_clamav            543   0.0  0.1 435418912  21968   ??  Ss    7:02PM   0:00.24 /opt/local/bin/freshclam -d
+admin             1019   0.0  0.0 435300272   1392 s000  S+    7:05PM   0:00.01 grep freshclam
 ```
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
@@ -423,21 +425,17 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo chown -R _clamav:_clamav /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
- 4. Restart the system, and after reboot, check if everything works:
+ 4. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
+543	0	com.personal.freshclam
 
-# Expected output:
-12345	0	com.personal.freshclam
-```
-```zsh
 ps aux | grep freshclam
-
-# Expected output:
-_clamav          12345   0.0  0.0  ... /opt/local/bin/freshclam -d
+_clamav            543   0.0  0.1 435418912  21968   ??  Ss    7:02PM   0:00.24 /opt/local/bin/freshclam -d
+admin             1036   0.0  0.0 435300240   1392 s000  S+    7:07PM   0:00.00 grep freshclam
 ```
 ```zsh
-tail -20 /opt/local/var/log/clamav/freshclam.log
+sudo tail -20 /opt/local/var/log/clamav/freshclam.log
 ```
  5. To restart a service, run either of these depending on the erraneous service:
 ```zsh
@@ -506,13 +504,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clammail.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clammail.plist
 ```
- 4. Test it. This requires a working mail system on macOS (e.g., via postfix, see next section).
-```zsh
-touch ~/quarantine/test.txt
-```
-
-### (Optional) Postfix Configuration
- 1. Create SASL Password File
+ 4. Create SASL Password File
 ```zsh
 sudo vi /etc/postfix/sasl_passwd
 
@@ -525,12 +517,7 @@ sudo vi /etc/postfix/sasl_passwd
   - Search for "App passwords"
   - Generate a new app password for "Mail"
   - Use that 16-character password in the file above
- 3. Secure and hash password file:
-```zsh
-sudo chmod 600 /etc/postfix/sasl_passwd
-sudo postmap /etc/postfix/sasl_passwd
-```
- 4. Configure postfix
+ 3. Configure postfix
 ```zsh
 sudo vi /etc/postfix/main.cf
 
@@ -543,17 +530,27 @@ smtp_sasl_mechanism_filter = plain
 smtp_use_tls = yes
 smtp_tls_security_level = encrypt
 smtp_tls_CAfile = /etc/ssl/cert.pem
+smtp_address_preference = ipv4
+```
+ 4. Secure and hash password file:
+```zsh
+sudo chmod 600 /etc/postfix/sasl_passwd
+sudo postmap /etc/postfix/sasl_passwd
 ```
  5. Start postfix
 ```zsh
 sudo postfix start
 sudo postfix reload
 ```
- 6. Send a test email and check Gmail inbox
+ 6. If there is a failed queue from previous steps, run this command to clear the queue.
+```zsh
+sudo postsuper -d ALL
+```
+ 7. Paste this command in cli to send a test email (and check Gmail inbox):
 ```zsh
 echo "Test email from ClamAV" | mail -s "Test Subject" yjwarrenwang@gmail.com
 ```
- 7. Edit the notification script to use actual email:
+ 8. Edit the notification script to use actual email:
 ```zsh
 vi ~/scripts/clam-mail
 ```
