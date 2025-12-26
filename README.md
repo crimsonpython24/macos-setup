@@ -559,7 +559,149 @@ vi ~/scripts/clam-mail
 echo "There are new items for review in $HOME/quarantine" | mail -s "URGENT! Clamscan Found Infections!" yjwarrenwang@gmail.com
 ```
 
-### Cleanup Default MacPorts Services
+### (Optional) Implementing On-Access Scanning
+ > There isn't an official on-access scanning (only on linux) because it requires the Linux `fanotify` kernel API (kernel version ≥ 3.8) to block file access at the kernel level.
+
+ 1. Install `fswatch`:
+```zsh
+sudo port install fswatch
+```
+ 2. Create the on-access scan script:
+```zsh
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+WATCH_DIRS=(
+  "$HOME/Downloads"
+  "$HOME/Desktop"
+)
+LOG_FILE="$HOME/clamav-logs/onaccess-$(date +%F).log"
+CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
+
+# Create log directory
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Function to scan a file
+scan_file() {
+  local file="$1"
+  
+  # Skip if file doesn't exist or is a directory
+  [[ -f "$file" ]] || return 0
+  
+  # Log the scan
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Scanning: $file" >> "$LOG_FILE"
+  
+  # Scan with clamdscan if clamd is running
+  if [[ -S "$CLAMD_SOCKET" ]]; then
+    local scan_result
+    scan_result=$(/opt/local/bin/clamdscan --no-summary "$file" 2>&1 || true)
+    
+    if echo "$scan_result" | grep -qi "FOUND"; then
+      local virus_name
+      virus_name=$(echo "$scan_result" | grep -i "FOUND" | awk '{print $2}')
+      
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFECTED: $file" >> "$LOG_FILE"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Virus: $virus_name" >> "$LOG_FILE"
+      
+      # Send urgent macOS notification
+      osascript -e "display dialog \"ClamAV detected a virus on this device
+
+File: $(basename "$file")
+Virus: $virus_name
+Location: $(dirname "$file")
+
+Delete this file immediately.\" buttons {\"Open Finder\", \"OK\"} default button 1 with title \"ClamAV Alert\" with icon caution" 2>/dev/null &
+      
+      # Also send a regular notification
+      osascript -e "display notification \"VIRUS FOUND: $(basename "$file") - Please delete immediately!\" with title \"ClamAV Alert\" sound name \"Basso\"" 2>/dev/null || true
+      
+      # Send email alert
+      echo "ClamAV detected a virus on Mac"
+
+File: $file
+Virus: $virus_name
+Time: $(date)
+
+ACTION REQUIRED:
+Please delete this file immediately from Finder.
+
+---
+ClamAV On-Access Scanning" | mail -s "ClamAV detected a virus on Mac" yjwarrenwang@gmail.com 2>/dev/null || true
+      
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts sent (email + notification)" >> "$LOG_FILE"
+    else
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Clean" >> "$LOG_FILE"
+    fi
+  else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: clamd not running" >> "$LOG_FILE"
+  fi
+}
+
+# Watch directories and scan changed files
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] On-Access Scanner Started" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring: ${WATCH_DIRS[*]}" >> "$LOG_FILE"
+
+/opt/local/bin/fswatch -0 -r -e "\.git" -e "node_modules" -e "\.Trash" -e "\.DS_Store" "${WATCH_DIRS[@]}" | \
+  while IFS= read -r -d '' file; do
+    scan_file "$file"
+  done
+```
+```zsh
+sudo chmod +x /usr/local/bin/clamav-onaccess.sh
+```
+ 3. Create LaunchAgent to run as own user (1. ClamAV runs as the `_clamav` user, so it does not make sense to run the script as root, and 2. `fswatch` is not kernel-level, so giving it privilege escalation does not do anything).
+```zsh
+vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.clamav-onaccess</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/clamav-onaccess.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/clamav-onaccess-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/clamav-onaccess-stderr.log</string>
+</dict>
+</plist>
+```
+ 4. Load the LaunchAgent (note: this command should only show the on-access script because it is not ran as `sudo`).
+```
+launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+launchctl list | grep clamav-onaccess
+ps aux | grep fswatch
+```
+ 5. Reload the service.
+```zsh
+launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+```
+ 6. Run a live test. In two different terminals, run these script and verify that the device and email notification both work:
+```zsh
+tail -f ~/clamav-logs/onaccess-$(date +%F).log
+```
+```zsh
+cd ~/Downloads
+curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
+```
+ 7. Also run a clean file. The log should show that ClamAV scanned the file, but it did not take any actions.
+```zsh
+echo "This is a normal file" > ~/Downloads/test.txt
+```
+
+> Why tf did I just implement an AV for mac from binaries?
+
+### Clean Up Default MacPorts Services
 Since this guide uses its own launchd services, wrap up this setup by removing the symlinks:
 ```zsh
 sudo rm /Library/LaunchDaemons/org.macports.freshclam.plist
