@@ -720,6 +720,127 @@ echo "This is a normal file" > ~/Downloads/test.txt
 
 > Why tf did I just implement an AV for mac from binaries?
 
+### Sanity Checks After Reboot
+After restarting your system, verify all services are running correctly:
+
+ 1. Check all LaunchDaemons and LaunchAgents:
+```zsh
+sudo launchctl list | grep com.personal
+# Expected output:
+# PID    STATUS  LABEL
+# 541    0       com.personal.clamd
+# 543    0       com.personal.freshclam
+# -      0       com.personal.clamscan
+# -      0       com.personal.clammail
+
+launchctl list | grep com.personal
+# Expected output:
+# PID    STATUS  LABEL
+# 789    0       com.personal.clamav-onaccess
+```
+
+ 2. Verify processes are running:
+```zsh
+ps aux | grep -E 'clamd|freshclam|fswatch' | grep -v grep
+# Expected output should show:
+# admin          541   ... /opt/local/sbin/clamd
+# _clamav        543   ... /opt/local/bin/freshclam -d
+# admin          789   ... /opt/local/bin/fswatch ...
+```
+
+ 3. Check critical files and sockets exist:
+```zsh
+ls -la /opt/local/var/run/clamav/
+# Should show:
+# clamd.socket
+# clamd.pid
+# freshclam.pid
+
+ls -la /opt/local/share/clamav/ | head -5
+# Should show virus database files like:
+# bytecode.cvd
+# daily.cvd
+# main.cvd
+```
+
+ 4. Verify clamd is responsive:
+```zsh
+clamdscan --version
+# Should show version info without errors
+
+echo "test" > /tmp/test.txt
+clamdscan /tmp/test.txt
+# Should show: /tmp/test.txt: OK
+rm /tmp/test.txt
+```
+
+ 5. Check log files for errors:
+```zsh
+sudo tail -20 /opt/local/var/log/clamav/freshclam.log
+# Should show recent successful database updates
+
+sudo tail -20 /opt/local/var/log/clamav/clamd.log
+# Should show clamd started successfully
+
+tail -20 ~/clamav-logs/onaccess-$(date +%F).log
+# Should show "On-Access Scanner Started"
+```
+
+ 6. Test on-access scanning is working:
+```zsh
+# Watch the log in one terminal
+tail -f ~/clamav-logs/onaccess-$(date +%F).log
+
+# In another terminal, create a test file
+echo "test file" > ~/Downloads/sanity-check.txt
+# Log should immediately show it was scanned and is clean
+rm ~/Downloads/sanity-check.txt
+```
+
+ 7. Verify postfix is ready (if email notifications configured):
+```zsh
+sudo postfix status
+# Should show: postfix is running
+
+mailq
+# Should show: Mail queue is empty
+```
+
+ 8. Test EICAR detection end-to-end:
+```zsh
+# Download EICAR test file
+curl -L -o ~/Downloads/eicar-final-test.txt https://secure.eicar.org/eicar.com.txt
+
+# Within seconds, you should:
+# - See a macOS popup dialog about virus detection
+# - Receive an email alert
+# - See detection in the on-access log
+
+# Verify in log
+tail -20 ~/clamav-logs/onaccess-$(date +%F).log
+# Should show INFECTED and alerts sent
+
+# Clean up
+rm ~/Downloads/eicar-final-test.txt 2>/dev/null || true
+```
+
+ 9. Summary check - all services status:
+```zsh
+echo "=== ClamAV Service Status ==="
+echo ""
+echo "LaunchDaemons (system-wide):"
+sudo launchctl list | grep com.personal | awk '{print $3 ": " ($2 == 0 ? "✓" : "✗")}'
+echo ""
+echo "LaunchAgents (user-level):"
+launchctl list | grep com.personal | awk '{print $3 ": " ($2 == 0 ? "✓" : "✗")}'
+echo ""
+echo "clamd socket:"
+[[ -S /opt/local/var/run/clamav/clamd.socket ]] && echo "✓ Present" || echo "✗ Missing"
+echo ""
+echo "Virus database:"
+[[ -f /opt/local/share/clamav/daily.cvd ]] && echo "✓ Present" || echo "✗ Missing"
+```
+
 ### Clean Up Default MacPorts Services
 Since this guide uses its own launchd services, wrap up this setup by removing the symlinks:
 ```zsh
