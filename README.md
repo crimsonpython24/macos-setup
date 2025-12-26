@@ -119,7 +119,16 @@ EOF
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 11. Go inside Settings and manually toggle these two options. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
+ 11. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall is enabled (ALF is enabled by default):
+```zsh
+ls includes/enablePF-mscp.sh
+sudo bash includes/enablePF-mscp.sh
+
+sudo pfctl -a '*' -sr | grep "block drop in all"
+# should output smt like "block drop in all" i.e. default deny all incoming
+sudo pfctl -s info
+```
+ 12. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
 
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
