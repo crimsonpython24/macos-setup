@@ -136,14 +136,14 @@ sudo fdesetup status
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 2. ClamAV Setup (MacPorts)
- 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts
- 2. Give the current user database permissions and substitute "admin" with actual username:
+ 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also no need to give `daemondo` full-disk access.
+ 3. Give the current user database permissions and substitute "admin" with actual username:
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R admin:staff /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
- 3. Also give logfile permissions:
+ 3. Also configure logfiles and give ClamAV logfile permissions:
 ```zsh
 sudo chown -R admin:staff /opt/local/var/log/clamav
 sudo chmod -R 755 /opt/local/var/log/clamav
@@ -159,7 +159,7 @@ NotifyClamd /opt/local/etc/clamd.conf
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 
-# Comment out this line (required when running clamd as your user instead of _clamav)
+# Comment out this line (required when running clamd as another user instead of `_clamav`)
 #User _clamav
 
 # Uncomment
@@ -213,13 +213,13 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 
-# Add to the end
+# Append to end
 ExcludePath ^/.*\.git
 ExcludePath ^/.*/node_modules
 ExcludePath ^/.*/Library/Caches
 ExcludePath ^/.*\.Trash
 ```
- 8. Update the scan script:
+ 8. Create scan script:
 ```zsh
 sudo mkdir /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
@@ -286,18 +286,19 @@ else
   done
 fi
 ```
- 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). Next, also give the daemon similar permissions:
+ 9. Also give the daemon similar permissions:
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R admin:staff /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
- 10. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
+ 10. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). 
+ 11. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
 ```conf
 Foreground no
 ```
- 11. The ClamAV daemon should now run in the background properly with `freshclam -d`
- 12. Load the clamd daemon and verify it's working:
+ 12. The ClamAV daemon should now run in the background properly with `freshclam -d`
+ 13. Load the clamd daemon and verify it's working:
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
@@ -431,6 +432,19 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo chown -R admin:staff /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
+
+sudo mkdir -p /var/log
+sudo mkdir -p /opt/local/var/log/clamav
+sudo mkdir -p /opt/local/var/run/clamav
+
+sudo chown admin:staff /opt/local/var/log/clamav
+sudo chown admin:staff /opt/local/var/run/clamav
+sudo chown admin:staff /var/log/clamd-stdout.log 2>/dev/null || sudo touch /var/log/clamd-stdout.log && sudo chown admin:staff /var/log/clamd-stdout.log
+sudo chown admin:staff /var/log/clamd-stderr.log 2>/dev/null || sudo touch /var/log/clamd-stderr.log && sudo chown admin:staff /var/log/clamd-stderr.log
+
+sudo chmod 755 /opt/local/var/log/clamav
+sudo chmod 755 /opt/local/var/run/clamav
+sudo chmod 644 /var/log/clamd-*.log 2>/dev/null || true
 ```
  4. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
 ```zsh
