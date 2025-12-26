@@ -17,7 +17,13 @@
    - Also install security apps (e.g., Murus, pf configurators) in Admin, because they work better with full-system access
 
 ### Security Baselines
- - Manually change the following options:
+#### Option 1: NIST Configuration (Recommended)
+ - Load NIST's MacOS Security configuration with [CNSSI-1253_high](https://github.com/usnistgov/macos_security/blob/2ac6b9078edf2cc521ca90450111e32de164916a/baselines/cnssi-1253_high.yaml)
+   - CNSSI-1253 is the selected baseline in this example as it covers most settings without requiring an antivirus
+   - Run the configurator to alter some rules, e.g., disable smart card for those who do not have one
+
+#### Option 2: Manual Configuration
+ - If one does not want to load the NIST configuration, they can do the following instead:
    - Enable FileVault, Firewall, and [GateKeeper](https://dev.to/reybis/enable-gatekeeper-macos-1klh)
    - Disable AirDrop, [Remote Login](https://support.apple.com/en-gb/guide/mac-help/mchlp1066/mac), [Remote Desktop](https://support.apple.com/en-za/guide/mac-help/mh11851/mac), and all [remote access](https://support.apple.com/guide/remote-desktop/enable-remote-management-apd8b1c65bd/mac) sharing settings
    - Disable [Bonjour](https://www.tenable.com/audits/items/CIS_Apple_macOS_10.13_v1.1.0_Level_2.audit:d9dcee7e4d2b8d2ee54f437158992d88) and [Guest User](https://discussions.apple.com/thread/253375291?sortBy=rank) if possible
@@ -28,6 +34,9 @@
    - Ensure that [Full Security](https://support.apple.com/en-za/guide/mac-help/mchl768f7291/mac), [SIP](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/ConfiguringSystemIntegrityProtection/ConfiguringSystemIntegrityProtection.html), and [secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) are enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
    - [Prevent](https://github.com/sunknudsen/guides/tree/main/archive/how-to-protect-mac-computers-from-cold-boot-attacks) cold-boot attacks
+ - System Settings
+   - Even with NIST parameters active, one can still verify FileVault, Firewall, and related settings in the Settings app
+   - Disable automatic accessory access in "Settings -> Privacy & Security -> Accessories"
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
@@ -40,7 +49,72 @@ This section reflects the "secure, not private" concept in that, although these 
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
-## 1. ClamAV Setup (MacPorts)
+## 1. NIST Setup
+ > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Avoid using packages to keep dependency tree clean.
+
+Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates the system reflects the selected policy, and a configuration profile that implements the changes.
+
+ > Unless otherwise specified, all commands here should be ran at the project base.
+
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the provided YAML config in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
+ 2. Install dependencies, recommended within a virtual environment.
+```zsh
+xcode-select --install
+sudo port install python314
+sudo port select --set python python314
+sudo port select --set python3 python314
+```
+```zsh
+cd ~/Desktop/macos_security
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install --upgrade pip
+pip3 install pyyaml xlwt
+```
+ 3. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself.
+```zsh
+cd build
+mkdir baselines
+cd baselines
+vi cnssi-1253_cust.yaml
+
+python3 scripts/generate_guidance.py -P -s -p build/baselines/cnssi-1253_cust.yaml
+```
+ 3. Run the compliance script.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 4. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile (one might have to open the Settings app to finish installation):
+```zsh
+cd build/cnssi-1253_cust/mobileconfigs/unsigned
+sudo open cnssi-1253_cust.mobileconfig
+```
+ 5. Optional: Load custom ODV values
+```zsh
+cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
+odv:
+  custom: 5
+EOF
+```
+```zsh
+cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
+odv:
+  custom: 0
+EOF
+```
+ 6. Remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
+ 7. Run the compliance script again (steps 3 and 4) with options 2, and then 1. This step should yield ~80% compliance. Now run option 3 and go through all scripts (select `y` for all settings) to cover settings not covered within the configuration profile.
+ 8. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
+ 9. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these four:
+```zsh
+os_external_storage_access_defined
+os_firewall_default_deny_require
+system_settings_filevault_enforce
+system_settings_security_update_install
+```
+ 10. Go inside Settings and manually toggle these four options. After this step, the script should yield 100% compliance. Restart the device.
+
+## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already.
  2. Give the current user database permissions and substitute "admin" with actual username:
 ```
@@ -266,4 +340,3 @@ If the output is empty, it means that no ClamAV configuration from MacPorts will
 
 <sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
 <sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
-
