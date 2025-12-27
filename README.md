@@ -171,17 +171,7 @@ Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
 ```
- 5. Create socket and logging directories for `_clamav` user (this is because MacPorts designed `clamd` to run as `_clamav` and it takes unnecessary workarounds to let it run as `admin:staff`:
-```zsh
-sudo mkdir -p /opt/local/var/run/clamav
-sudo chown _clamav:_clamav /opt/local/var/run/clamav
-sudo chmod 755 /opt/local/var/run/clamav
-
-sudo mkdir -p /opt/local/var/log/clamav
-sudo chown _clamav:_clamav /opt/local/var/log/clamav
-sudo chmod 755 /opt/local/var/log/clamav
-```
- 6. Create daemon:
+ 5. Create daemon:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```
@@ -205,15 +195,16 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/clamd-stdout.log</string>
+    <string>/opt/local/var/log/clamav/clamd-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/clamd-stderr.log</string>
+    <string>/opt/local/var/log/clamav/clamd-stderr.log</string>
 </dict>
 </plist>
 ```
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
+ 6. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while).
  7. Now that `clamd` is configured, use `clamdscan` over `clamscan` for better performance:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
@@ -294,24 +285,19 @@ fi
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
- 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while).
- 10. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
-```conf
-Foreground no
-```
- 11. The ClamAV daemon should now run in the background properly with `freshclam -d`
- 12. Restart the computer, go to "System Preferences> Security & Privacy> Full Disk Access" and give MacPorts process "daemondo" FDA.
- 13. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
+ 9. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
 sudo launchctl list | grep com.personal
-# Expected output:
 # 2993	0	com.personal.clamd
 
 ls -la /opt/local/var/run/clamav/clamd.socket
+# srw-rw-rw-  1 admin  staff  0 Dec 27 12:06 /opt/local/var/run/clamav/clamd.socket
+
 clamdscan --version
+# ClamAV 1.5.1/27861/Fri Dec 26 15:26:00 2025
 ```
 
 **Note** Manual scan commands:
@@ -342,6 +328,7 @@ sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
  3. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
 ```zsh
+sudo vi /opt/local/etc/freshclam.conf
 Foreground yes
 ```
  4. Create the daemon file:
@@ -360,35 +347,45 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
         <string>/opt/local/bin/freshclam</string>
         <string>-d</string>
     </array>
+    <key>UserName</key>
+    <string>admin</string>
+    <key>GroupName</key>
+    <string>staff</string>
     <key>KeepAlive</key>
     <true/>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/freshclam-stdout.log</string>
+    <string>/opt/local/var/log/clamav/freshclam-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/freshclam-stderr.log</string>
+    <string>/opt/local/var/log/clamav/freshclam-stderr.log</string>
 </dict>
 </plist>
 ```
- 5. Reload the daemon (unload may throw error if this is the first time running the daemon):
+ 5. Change the logfile permissions to ensure the logs are owned by `admin` (current user):
+```zsh
+sudo chown admin:staff /opt/local/var/log/clamav/freshclam.log
+sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
+```
+ 6. Reload the daemon (unload may throw error if this is the first time running the daemon):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 6. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
+ 7. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
 # 3030	0	com.personal.freshclam
 
 sudo launchctl list | grep com.personal          
-# 2993	0	com.personal.clamd
-# 3030	0	com.personal.freshclam
+# 2602	0	com.personal.clamd
+# 2685	0	com.personal.freshclam
 
 ps aux | grep freshclam
-# admin             3042   0.0  0.0 435299440   1376 s000  S+   11:53PM   0:00.00 grep freshclam
-# _clamav           3030   0.0  0.0 435376560  13088   ??  Ss   11:52PM   0:00.04 /opt/local/bin/freshclam -d
+# admin             2696   0.0  0.0 410724368   1440 s000  S+   12:24PM   0:00.00 grep freshclam
+# admin             2685   0.0  0.0 411373376  12752   ??  Ss   12:22PM   0:00.09 /opt/local/bin/freshclam -d
 ```
+
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
 ### Setting Up Daily Scans
@@ -410,6 +407,10 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
         <string>/Users/admin</string>
         <string>/Users/warren</string>
     </array>
+    <key>UserName</key>
+    <string>admin</string>
+    <key>GroupName</key>
+    <string>staff</string>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -418,31 +419,41 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
         <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/var/log/clamscan-stdout.log</string>
+    <string>/opt/local/var/log/clamav/clamscan-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/clamscan-stderr.log</string>
+    <string>/opt/local/var/log/clamav/clamscan-stderr.log</string>
 </dict>
 </plist>
 ```
- 2. Load the daemon and give appropriate permissions. The daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
+ 2. Load the daemon and give appropriate permissions.
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo chown -R _clamav:_clamav /opt/local/share/clamav
-sudo chmod 755 /opt/local/share/clamav
 ```
- 3. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
+ 3. Check if Clamscan works (note: `freshclam.log` may show an error before a restart):
 ```zsh
-sudo launchctl list | grep com.personal.freshclam
-# 3030	0	com.personal.freshclam
+sudo launchctl list | grep com.personal.clamscan
+# -	0	com.personal.clamscan
 
-ps aux | grep freshclam
-# admin             3073   0.0  0.0 435300448   1376 s000  S+   11:54PM   0:00.00 grep freshclam
-# _clamav           3030   0.0  0.0 435376560  13088   ??  Ss   11:52PM   0:00.04 /opt/local/bin/freshclam -d
+sudo tail -20 /opt/local/var/log/clamav/freshclam.log
+# ClamAV update process started at Sat Dec 27 12:22:59 2025
+
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo launchctl start com.personal.clamscan
+cat /opt/local/var/log/clamav/clamscan-stderr.log
+# Should be empty
+
+ls -la ~/clamav-logs/
+# -rw-r-----   1 admin  staff  128523 Dec 27 12:34 scan-2025-12-27.log
+
+sudo launchctl list | grep com.personal.clamscan
+# -    0    com.personal.clamscan
 ```
 ```zsh
-sudo tail -20 /opt/local/var/log/clamav/freshclam.log
+cat ~/clamav-logs/scan-2025-12-27.log
+# Go into System Settings and allow full disk access
 ```
- 5. To restart a service, run either of these depending on the erraneous service:
+ 4. To restart a service in case of an error, run either of these depending on the erraneous service:
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
