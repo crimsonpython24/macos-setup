@@ -110,16 +110,16 @@ odv:
   custom: 0
 EOF
 ```
- 6. If custom ODV values are loaded, remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
- 7. Run the compliance script again (steps 3 and 4) with options 2, and then 1 in this order. The script should now yield ~80% compliance.
- 8. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile.
- 9. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
- 10. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 7. If custom ODV values are loaded, remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
+ 8. Run the compliance script again (steps 3 and 4) with options 2, and then 1 in this order. The script should now yield ~80% compliance.
+ 9. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile.
+ 10. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
+ 11. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 11. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
+ 12. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -131,32 +131,36 @@ sudo pfctl -s info
 ```zsh
 sudo fdesetup status
 ```
- 12. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
+ 13. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 2. ClamAV Setup (MacPorts)
  1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also do not give `daemondo` full-disk access because it is unnecessary.
- 2. Give the current user database permissions and substitute "admin" with actual username:
+ 2. Give the current user database and logfile permissions, and substitute "admin" with actual username:
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R admin:staff /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
-```
- 3. Also give logfile permissions:
-```zsh
+
+sudo mkdir -p /opt/local/var/log/clamav
 sudo chown -R admin:staff /opt/local/var/log/clamav
-sudo chmod -R 755 /opt/local/var/log/clamav
+sudo chmod 755 /opt/local/var/log/clamav
+
+sudo mkdir -p /opt/local/var/run/clamav
+sudo chown -R admin:staff /opt/local/var/run/clamav
+sudo chmod 755 /opt/local/var/run/clamav
 ```
+ 3. Set up Freshclam.
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
 
-# Uncomment these two
+# Uncomment
 UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 DatabaseDirectory /opt/local/share/clamav
 ```
- 4. Set up `clamd`:
+ 4. Set up `clamd`.
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 
@@ -167,7 +171,7 @@ Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
 ```
- 5. Create socket directories:
+ 5. Create socket and logging directories for `_clamav` user (this is because MacPorts designed `clamd` to run as `_clamav` and it takes unnecessary workarounds to let it run as `admin:staff`:
 ```zsh
 sudo mkdir -p /opt/local/var/run/clamav
 sudo chown _clamav:_clamav /opt/local/var/run/clamav
@@ -206,6 +210,9 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
     <string>/var/log/clamd-stderr.log</string>
 </dict>
 </plist>
+```
+```zsh
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
  7. Now that `clamd` is configured, use `clamdscan` over `clamscan` for better performance:
 ```zsh
@@ -284,12 +291,10 @@ else
   done
 fi
 ```
- 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while). Next, also give the daemon similar permissions:
 ```zsh
-sudo mkdir -p /opt/local/var/run/clamav
-sudo chown -R admin:staff /opt/local/var/run/clamav
-sudo chmod 755 /opt/local/var/run/clamav
+sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
+ 9. Run `freshclam` *without sudo*, and the command should run fine with ClamAV updating its database (which might take a while).
  10. For MacPorts, it defaults to running in the foreground. If one decides to stop here and not implement anything else in this section, change this line in `/opt/local/etc/freshclam.conf` to run silently and not block terminal i/o:
 ```conf
 Foreground no
@@ -335,11 +340,11 @@ sudo kill 53360
 ```zsh
 sudo rm /opt/local/var/run/clamav/freshclam.pid
 ```
- 2. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
+ 3. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
 ```zsh
 Foreground yes
 ```
- 3. Create the daemon file:
+ 4. Create the daemon file:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -366,12 +371,12 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
- 4. Reload the daemon (unload may throw error if this is the first time running the daemon):
+ 5. Reload the daemon (unload may throw error if this is the first time running the daemon):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 5. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
+ 6. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
 # 3030	0	com.personal.freshclam
@@ -387,11 +392,7 @@ ps aux | grep freshclam
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the MacPorts packages, and macOS displays the certificate signer's name for background processes.
 
 ### Setting Up Daily Scans
- 1. Using the scan file in the first section, make it executable instead of being a placeholder:
-```zsh
-sudo chmod +x /usr/local/bin/clamav-scan.sh
-```
- 2. Create LaunchDaemon for daily scans, where the `/Users/admin` array should be the directories to scan:
+ 1. Create LaunchDaemon for daily scans, where the `/Users/admin` array should be the directories to scan:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -423,13 +424,13 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 </dict>
 </plist>
 ```
- 3. Load the daemon and give appropriate permissions. The daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
+ 2. Load the daemon and give appropriate permissions. The daemon runs as the `_clamav` user for security, so final permissions must be set for `_clamav` in step 3. Otherwise, running through the `admin:staff` user is fine.
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo chown -R _clamav:_clamav /opt/local/share/clamav
 sudo chmod 755 /opt/local/share/clamav
 ```
- 4. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
+ 3. Restart the system, and after reboot, check if everything works (note: `freshclam.log` may show an error before a restart):
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
 # 3030	0	com.personal.freshclam
