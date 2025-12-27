@@ -428,39 +428,28 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
  2. Load the daemon and give appropriate permissions.
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo launchctl list | grep com.personal.clamscan
 ```
- 3. Check if Clamscan works (note: `freshclam.log` may show an error before a restart):
+ 3. Go into System Settings and enable `clamd`, `clamdscan`, and `clamscan`. Restart `clamd`.
+```zsh
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl list | grep com.personal.clamd
+# 1276	0	com.personal.clamd
+```
+ 4. Check if Clamscan works (note: `freshclam.log` may show an error before a restart):
 ```zsh
 sudo launchctl list | grep com.personal.clamscan
 # -	0	com.personal.clamscan
 
-sudo tail -20 /opt/local/var/log/clamav/freshclam.log
-# ClamAV update process started at Sat Dec 27 12:22:59 2025
-
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl start com.personal.clamscan
 cat /opt/local/var/log/clamav/clamscan-stderr.log
 # Should be empty
 
 ls -la ~/clamav-logs/
-# -rw-r-----   1 admin  staff  128523 Dec 27 12:34 scan-2025-12-27.log
+# Should show scan-YYYY-MM-DD.log file
 
-sudo launchctl list | grep com.personal.clamscan
-# -    0    com.personal.clamscan
-```
-```zsh
-cat ~/clamav-logs/scan-2025-12-27.log
-# Go into System Settings and allow full disk access
-```
- 4. To restart a service in case of an error, run either of these depending on the erraneous service:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
-```
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+tail -40 ~/clamav-logs/scan-$(date +%F).log
 ```
 
 ### Testing with EICAR
@@ -560,19 +549,12 @@ sudo postfix reload
 ```
  6. If there is a failed queue from previous steps, run this command to clear the queue. Also check queue status with `mailq`.
 ```zsh
+mailq
 sudo postsuper -d ALL
 ```
  7. Paste this command in cli to send a test email (and check Gmail inbox):
 ```zsh
 echo "Test email from ClamAV" | mail -s "Test Subject" yjwarrenwang@gmail.com
-```
- 8. Edit the notification script to use actual email:
-```zsh
-vi ~/scripts/clam-mail
-```
-```bash
-#!/bin/bash
-echo "There are new items for review in $HOME/quarantine" | mail -s "URGENT! Clamscan Found Infections!" yjwarrenwang@gmail.com
 ```
 
 ### (Optional) Implementing On-Access Scanning
@@ -585,7 +567,8 @@ sudo port install fswatch
  2. Create the on-access scan script:
 ```zsh
 sudo vi /usr/local/bin/clamav-onaccess.sh
-
+```
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -668,10 +651,10 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring: ${WATCH_DIRS[*]}" >> "$LOG_FILE
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-onaccess.sh
 ```
- 3. Create LaunchAgent to run as own user (1. ClamAV runs as the `_clamav` user, so it does not make sense to run the script as root, and 2. `fswatch` is not kernel-level, so giving it privilege escalation does not do anything).
+ 3. Create LaunchAgent to run as own user (This runs as a LaunchAgent (user-level) rather than LaunchDaemon (system-level) because the script needs access to `$HOME` for logging and works with user directories like Downloads and Desktop).
 ```zsh
 sudo mkdir ~/Library/LaunchAgents/
-vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+sudo vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -700,12 +683,7 @@ launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 launchctl list | grep clamav-onaccess
 ps aux | grep fswatch
 ```
- 5. Reload the service.
-```zsh
-launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-```
- 6. Run a live test. In two different terminals, run these script and verify that the device and email notification both work:
+ 5. Run a live test. In two different terminals, run these script and verify that the device and email notification both work:
 ```zsh
 tail -f ~/clamav-logs/onaccess-$(date +%F).log
 ```
@@ -713,7 +691,7 @@ tail -f ~/clamav-logs/onaccess-$(date +%F).log
 cd ~/Downloads
 curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
 ```
- 7. Also run a clean file. The log should show that ClamAV scanned the file, but it did not take any actions.
+ 6. Also run a clean file. The log should show that ClamAV scanned the file, but it did not take any actions.
 ```zsh
 echo "This is a normal file" > ~/Downloads/test.txt
 ```
