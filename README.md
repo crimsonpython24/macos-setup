@@ -160,6 +160,10 @@ UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 DatabaseDirectory /opt/local/share/clamav
 ```
+```zsh
+sudo chown admin:staff /opt/local/var/log/clamav/freshclam.log
+sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
+```
  4. Set up `clamd`.
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
@@ -170,6 +174,8 @@ PidFile /opt/local/var/run/clamav/clamd.pid
 Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
+LogVerbose yes
+LogFileMaxSize 10M
 ```
  5. Create daemon:
 ```zsh
@@ -220,8 +226,9 @@ ExcludePath ^/.*/Library/Application Support/AddressBook
 ExcludePath ^/.*/Library/Application Support/FaceTime
 ExcludePath ^/.*/Library/Application Support/CallHistoryDB
 ExcludePath ^/.*/Library/Autosave Information
-ExcludePath ^/.*/Library/Group\ Containers
-ExcludePath \.bnnsir$
+ExcludePath ^/.*\.viminfo$
+ExcludePath ^/.*\.bnnsir$
+ExcludePath ^/.*/Library/Group Containers
 ```
  8. Update the scan script:
 ```zsh
@@ -280,6 +287,7 @@ else
     echo "Scanning: $TARGET"
     "$CLAMSCAN" -r -i \
       --move="$QUARANTINE_DIR" \
+      --exclude="\.viminfo$" \
       --exclude-dir="\.git" \
       --exclude-dir="node_modules" \
       --exclude-dir="Library/Caches" \
@@ -292,7 +300,26 @@ fi
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
- 9. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
+ 9. Create a permission wrapper (because giving `/bin/bash` FDA is insecure):
+```zsh
+sudo vi /usr/local/bin/clamav-wrapper.c
+```
+```c
+#include <unistd.h>
+#include <stdio.h>
+
+int main(int argc, char *argv[]) {
+    char *args[] = {"/bin/bash", "/usr/local/bin/clamav-scan.sh", "/Users/admin", NULL};
+    execv("/bin/bash", args);
+    perror("execv failed");
+    return 1;
+}
+```
+```zsh
+sudo gcc -o /usr/local/bin/clamav-wrapper /usr/local/bin/clamav-wrapper.c
+sudo chmod +x /usr/local/bin/clamav-wrapper
+```
+ 10. Check if everything is working so far (`com.personal.freshclam` will be implemented in the following sections):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
@@ -329,16 +356,7 @@ admin            53360   0.0  0.0 435380864  15440 s000  SN   12:21AM   0:00.09 
 
 sudo kill 53360
 ```
- 2. Always run this step to ensure cleanup from the previous section.
-```zsh
-sudo rm /opt/local/var/run/clamav/freshclam.pid
-```
- 3. Turn on the foreground service to prevent freshclam from forking itself automatically (this should be prioritized over the previous section):
-```zsh
-sudo vi /opt/local/etc/freshclam.conf
-Foreground yes
-```
- 4. Create the daemon file:
+ 2. Create the daemon file:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -369,17 +387,12 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
- 5. Change the logfile permissions to ensure the logs are owned by `admin` (current user):
-```zsh
-sudo chown admin:staff /opt/local/var/log/clamav/freshclam.log
-sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
-```
- 6. Reload the daemon (unload may throw error if this is the first time running the daemon):
+ 3. Reload the daemon (unload may throw error if this is the first time running the daemon):
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 7. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
+ 4. Verify: the status should be "??" to show that the process is detached from the terminal, and the status code in launchctl should be 0
 ```zsh
 sudo launchctl list | grep com.personal.freshclam
 # 3030	0	com.personal.freshclam
@@ -409,10 +422,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
     <string>com.personal.clamscan</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>/usr/local/bin/clamav-scan.sh</string>
-        <string>/Users/admin</string>
-        <string>/Users/warren</string>
+        <string>/usr/local/bin/clamav-wrapper</string>
     </array>
     <key>UserName</key>
     <string>admin</string>
@@ -434,22 +444,34 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
  2. Load the daemon and give appropriate permissions.
 ```zsh
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl list | grep com.personal.clamscan
 ```
- 3. Go into System Settings and enable `clamd`, `clamdscan`, and `clamscan`. Restart `clamd`.
+ 3. Restart `clamd` after the above changes.
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl list | grep com.personal.clamd
 # 1276	0	com.personal.clamd
 ```
- 4. Check if Clamscan works (note: `freshclam.log` may show an error before a restart):
+ 4. Go into "Settings > Privacy & Security > Full Disk Access" and add these three files:
 ```zsh
+/usr/local/bin/clamav-wrapper
+/opt/local/bin/clamdscan
+/opt/local/sbin/clamd
+```
+ 5. Check if Clamscan works:
+```zsh
+# Remember to do this after any change
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
+
 sudo launchctl list | grep com.personal.clamscan
 # -	0	com.personal.clamscan
 
 sudo launchctl start com.personal.clamscan
+sleep 25
 cat /opt/local/var/log/clamav/clamscan-stderr.log
 # Should be empty
 
@@ -472,7 +494,7 @@ rm -f eicar.com.txt
 ```
 This confirms that ClamAV can detect threats. The EICAR file is not an actual virus, it's a standard test file recognized by all antivirus software.
 
-### Email Notifications (Optional)
+### (Optional Pt 1) Email Notifications
 Set up email alerts when infections are found in the quarantine directory.
  1. Create the email notification script:
 ```zsh
@@ -564,7 +586,7 @@ sudo postsuper -d ALL
 echo "Test email from ClamAV" | mail -s "Test Subject" yjwarrenwang@gmail.com
 ```
 
-### (Optional) Implementing On-Access Scanning
+### (Optional Pt 2) Implementing On-Access Scanning
  > There isn't an official on-access scanning (only on linux) because it requires the Linux `fanotify` kernel API (kernel version ≥ 3.8) to block file access at the kernel level.
 
  1. Install `fswatch`:
@@ -581,8 +603,7 @@ set -euo pipefail
 
 # Configuration
 WATCH_DIRS=(
-  "$HOME/Downloads"
-  "$HOME/Desktop"
+  "/Users/admin"
 )
 LOG_FILE="$HOME/clamav-logs/onaccess-$(date +%F).log"
 CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
@@ -612,14 +633,22 @@ scan_file() {
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFECTED: $file" >> "$LOG_FILE"
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] Virus: $virus_name" >> "$LOG_FILE"
       
-      # Send urgent macOS notification
-      osascript -e "display dialog \"ClamAV detected a virus on this device
+      # Send urgent macOS notification with button handling
+      local file_dir
+      file_dir=$(dirname "$file")
+      
+      BUTTON_RESULT=$(osascript -e "display dialog \"ClamAV detected a virus on this device
 
 File: $(basename "$file")
 Virus: $virus_name
-Location: $(dirname "$file")
+Location: $file_dir
 
-Delete this file immediately.\" buttons {\"Open Finder\", \"OK\"} default button 1 with title \"ClamAV Alert\" with icon caution" 2>/dev/null &
+Delete this file immediately.\" buttons {\"Open Folder\", \"OK\"} default button 1 with title \"ClamAV Alert\" with icon caution" -e "button returned of result" 2>/dev/null || echo "OK")
+      
+      # Open Finder to the file location if user clicked that button
+      if [[ "$BUTTON_RESULT" == "Open Folder" ]]; then
+        open "$file_dir"
+      fi
       
       # Also send a regular notification
       osascript -e "display notification \"VIRUS FOUND: $(basename "$file") - Please delete immediately!\" with title \"ClamAV Alert\" sound name \"Basso\"" 2>/dev/null || true
@@ -650,7 +679,17 @@ ClamAV On-Access Scanning" | mail -s "ClamAV detected a virus on Mac" yjwarrenwa
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] On-Access Scanner Started" >> "$LOG_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring: ${WATCH_DIRS[*]}" >> "$LOG_FILE"
 
-/opt/local/bin/fswatch -0 -r -e "\.git" -e "node_modules" -e "\.Trash" -e "\.DS_Store" "${WATCH_DIRS[@]}" | \
+/opt/local/bin/fswatch -0 -r \
+  -e "\.git" \
+  -e "node_modules" \
+  -e "\.Trash" \
+  -e "\.DS_Store" \
+  -e "Library/Caches" \
+  -e "Library/Logs" \
+  -e "Library/Application Support/Google" \
+  -e "Library/Application Support/Slack" \
+  -e "\.viminfo" \
+  "${WATCH_DIRS[@]}" | \
   while IFS= read -r -d '' file; do
     scan_file "$file"
   done
@@ -701,6 +740,118 @@ curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
  6. Also run a clean file. The log should show that ClamAV scanned the file, but it did not take any actions.
 ```zsh
 echo "This is a normal file" > ~/Downloads/test.txt
+```
+ 7. Also update the `clamav-scan` script to utilize notifications:
+```zsh
+sudo vi /usr/local/bin/clamav-scan.sh
+```
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+LOG_DIR="$HOME/clamav-logs"
+QUARANTINE_DIR="$HOME/quarantine"
+EMAIL="yjwarrenwang@gmail.com"
+
+# Create directories
+mkdir -p "$LOG_DIR" "$QUARANTINE_DIR"
+
+# If no arguments, default to Downloads
+TARGETS=("${@:-$HOME/Downloads}")
+
+# Temporary file for scan results
+SCAN_RESULT_FILE=$(mktemp)
+
+# Check if clamd is running
+if [[ -S /opt/local/var/run/clamav/clamd.socket ]]; then
+  # Use clamdscan (faster, multi-threaded)
+  SCANNER="/opt/local/bin/clamdscan"
+  echo "Using clamdscan (daemon mode - faster)"
+  
+  for TARGET in "${TARGETS[@]}"; do
+    echo "Scanning: $TARGET"
+    # Don't exit on scan errors (infections cause non-zero exit)
+    "$SCANNER" --multiscan \
+      --move="$QUARANTINE_DIR" \
+      "$TARGET" 2>&1 | tee -a "$LOG_DIR/scan-$(date +%F).log" | tee -a "$SCAN_RESULT_FILE" || true
+  done
+else
+  # Fall back to clamscan
+  echo "clamd not running, using clamscan (slower)"
+  
+  # Auto-detect clamscan location
+  CLAMSCAN=""
+  for p in \
+    /opt/local/bin/clamscan \
+    /usr/local/bin/clamscan \
+    /opt/homebrew/bin/clamscan
+  do
+    if [[ -x "$p" ]]; then
+      CLAMSCAN="$p"
+      break
+    fi
+  done
+  
+  if [[ -z "$CLAMSCAN" ]]; then
+    echo "[!] clamscan not found. Please check your installation path." >&2
+    exit 2
+  fi
+  
+  for TARGET in "${TARGETS[@]}"; do
+    echo "Scanning: $TARGET"
+    # Don't exit on scan errors (infections cause non-zero exit)
+    "$CLAMSCAN" -r -i \
+      --move="$QUARANTINE_DIR" \
+      --exclude="\.viminfo$" \
+      --exclude-dir="\.git" \
+      --exclude-dir="node_modules" \
+      --exclude-dir="Library/Caches" \
+      --exclude-dir="\.Trash" \
+      "$TARGET" \
+      -l "$LOG_DIR/scan-$(date +%F).log" | tee -a "$SCAN_RESULT_FILE" || true
+  done
+fi
+
+# Check if any infections were found
+INFECTED_COUNT=$(grep -i "Infected files:" "$SCAN_RESULT_FILE" | tail -1 | awk '{print $3}' || echo "0")
+
+if [[ "$INFECTED_COUNT" -gt 0 ]]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ALERT: $INFECTED_COUNT infected file(s) found!" | tee -a "$LOG_DIR/scan-$(date +%F).log"
+  
+  # Get list of infected files from quarantine
+  INFECTED_FILES=$(ls -1 "$QUARANTINE_DIR" 2>/dev/null | head -10 || echo "See quarantine directory")
+  
+  # Send macOS dialog notification with button handling
+  BUTTON_RESULT=$(osascript -e "display dialog \"ClamAV Daily Scan Alert
+
+$INFECTED_COUNT infected file(s) detected and moved to quarantine!
+
+Location: $QUARANTINE_DIR
+
+Files:
+$INFECTED_FILES
+
+Please review and delete immediately.\" buttons {\"Open Quarantine\", \"OK\"} default button 1 with title \"ClamAV Daily Scan Alert\" with icon caution" -e "button returned of result" 2>/dev/null || echo "OK")
+  
+  # Open Finder to quarantine if user clicked that button
+  if [[ "$BUTTON_RESULT" == "Open Quarantine" ]]; then
+    open "$QUARANTINE_DIR"
+  fi
+  
+  # Send macOS notification center alert
+  osascript -e "display notification \"$INFECTED_COUNT infected file(s) found and quarantined. Check quarantine folder!\" with title \"ClamAV Daily Scan Alert\" sound name \"Basso\"" 2>/dev/null || true
+  
+  # Send email alert
+  cat "$SCAN_RESULT_FILE" | mail -s "URGENT: ClamAV Daily Scan Found $INFECTED_COUNT Infected File(s)!" "$EMAIL" 2>/dev/null || true
+  
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts sent (email + notifications)" >> "$LOG_DIR/scan-$(date +%F).log"
+else
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Scan complete - No infections found" | tee -a "$LOG_DIR/scan-$(date +%F).log"
+fi
+
+# Cleanup
+rm -f "$SCAN_RESULT_FILE"
 ```
 
 > Why tf did I just implement an AV for mac from binaries?
