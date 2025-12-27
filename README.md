@@ -214,6 +214,14 @@ ExcludePath ^/.*\.git
 ExcludePath ^/.*/node_modules
 ExcludePath ^/.*/Library/Caches
 ExcludePath ^/.*\.Trash
+ExcludePath ^/.*/Library/Application Support/Knowledge
+ExcludePath ^/.*/Library/Application Support/com.apple.TCC
+ExcludePath ^/.*/Library/Application Support/AddressBook
+ExcludePath ^/.*/Library/Application Support/FaceTime
+ExcludePath ^/.*/Library/Application Support/CallHistoryDB
+ExcludePath ^/.*/Library/Autosave Information
+ExcludePath ^/.*/Library/Group\ Containers
+ExcludePath \.bnnsir$
 ```
  8. Update the scan script:
 ```zsh
@@ -242,10 +250,9 @@ if [[ -S /opt/local/var/run/clamav/clamd.socket ]]; then
   
   for TARGET in "${TARGETS[@]}"; do
     echo "Scanning: $TARGET"
-    "$SCANNER" --multiscan -i \
+    "$SCANNER" --multiscan \
       --move="$QUARANTINE_DIR" \
-      "$TARGET" \
-      -l "$LOG_DIR/scan-$(date +%F).log"
+      "$TARGET" 2>&1 | tee -a "$LOG_DIR/scan-$(date +%F).log"
   done
 else
   # Fall back to clamscan
