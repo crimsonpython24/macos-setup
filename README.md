@@ -56,7 +56,7 @@ Important: the security compliance project does **not** modify any system behavi
 
  > Unless otherwise specified, all commands here should be ran at the project base.
 
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the provided YAML config in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`
  2. Install dependencies, recommended within a virtual environment.
 ```zsh
 xcode-select --install
@@ -71,29 +71,7 @@ source venv/bin/activate
 python3 -m pip install --upgrade pip
 pip3 install pyyaml xlwt
 ```
- 3. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself.
-```zsh
-cd build
-mkdir baselines
-cd baselines
-vi cnssi-1253_cust.yaml
-
-python3 scripts/generate_guidance.py \
-        -P \
-        -s \
-        -p \
-    build/baselines/cnssi-1253_cust.yaml
-```
- 4. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
-```zsh
-sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
- 5. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around ~15%. Now install the profile if no custom ODVs are applied (one might have to open the Settings app to install the profile):
-```zsh
-cd build/cnssi-1253_cust/mobileconfigs/unsigned
-sudo open cnssi-1253_cust.mobileconfig
-```
- 6. Optional: Load custom ODV values
+ 3. Optional: Load custom ODV values
 ```zsh
 cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
 odv:
@@ -110,16 +88,45 @@ odv:
   custom: 0
 EOF
 ```
- 7. If custom ODV values are loaded, remove the old configuration profile from Settings, and repeat steps 3 and 4 from above. One way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately"
- 8. Run the compliance script again (steps 3 and 4) with options 2, and then 1 in this order. The script should now yield ~80% compliance.
- 9. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile.
- 10. Run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically exit.
- 11. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 4. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself.
+```zsh
+python3 scripts/generate_guidance.py \
+        -P \
+        -s \
+        -p \
+    build/baselines/cnssi-1253_cust.yaml
+```
+ 5. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 6. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around 15%. Exit the tool.
+ 7. Install the configuration profile (one might have to open the Settings app to install the profile):
+```zsh
+# Re-run this line if any of the YAML fields are edited (e.g., new ODVs)
+python3 scripts/generate_guidance.py \
+        -P \
+        -s \
+        -p \
+    build/baselines/cnssi-1253_cust.yaml
+```
+```zsh
+cd build/cnssi-1253_cust/mobileconfigs/unsigned
+sudo open cnssi-1253_cust.mobileconfig
+```
+ 8. If applicable, one way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 9. If not already, exit and run the compliance script again (step 6) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 10. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile. There will be a handful of them.
+ 11. Exit the script and run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically return to the main menu.
+ 12. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 12. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
+ 13. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -131,7 +138,10 @@ sudo pfctl -s info
 ```zsh
 sudo fdesetup status
 ```
- 13. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
+ 14. Note from previous step: one might encounter these two warnings
+   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all
+   - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
+ 15. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
