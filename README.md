@@ -96,7 +96,7 @@ python3 scripts/generate_guidance.py \
         -p \
     build/baselines/cnssi-1253_cust.yaml
 ```
- 5. Run the compliance script. If there is a previous profile installed, remove it in Settings after this step.
+ 5. Run the compliance script. If there is a previous profile installed, remove it in Settings before this step.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
@@ -115,7 +115,7 @@ cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
 ```
  8. If applicable, one way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 9. If not already, exit and run the compliance script again (step 6) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+ 9. If not already, exit and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
