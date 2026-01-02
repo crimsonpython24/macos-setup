@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration
 LOG_DIR="$HOME/clamav-logs"
 QUARANTINE_DIR="$HOME/quarantine"
-EMAIL="yjwarrenwang@gmail.com"  # Change to own email
+EMAIL="yjwarrenwang@gmail.com"  # Change this to your email
 SCAN_TYPE="Daily Scan"
 
 # Create directories
@@ -105,17 +105,23 @@ if [[ "$INFECTED_COUNT" -gt 0 ]]; then
   
   # Show notifications in background (non-blocking)
   (
-    osascript -e "display notification \"$INFECTED_COUNT infected file(s) found and quarantined!\" with title \"ClamAV ${SCAN_TYPE} Alert\" sound name \"Basso\"" 2>/dev/null || true
+    osascript -e 'tell application "System Events" to display notification "'"$INFECTED_COUNT"' infected file(s) found and quarantined!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null || true
     
-    BUTTON_RESULT=$(osascript -e "display dialog \"ClamAV ${SCAN_TYPE} Alert
+    BUTTON_RESULT=$(osascript <<EOF
+tell application "System Events"
+  activate
+  display dialog "ClamAV ${SCAN_TYPE} Alert
 
 $INFECTED_COUNT infected file(s) detected and moved to quarantine!
 
 Location: $QUARANTINE_DIR
 
-Please review and delete immediately.\" buttons {\"Open Quarantine\", \"OK\"} default button 1 with title \"ClamAV ${SCAN_TYPE} Alert\" with icon caution giving up after 300" -e "button returned of result" 2>/dev/null || echo "OK")
+Please review and delete immediately." buttons {"Open Quarantine", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
+end tell
+EOF
+    ) 2>/dev/null || echo "OK"
     
-    if [[ "$BUTTON_RESULT" == "Open Quarantine" ]]; then
+    if [[ "$BUTTON_RESULT" == *"Open Quarantine"* ]]; then
       open "$QUARANTINE_DIR"
     fi
   ) &
