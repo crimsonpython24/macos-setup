@@ -685,57 +685,32 @@ sudo launchctl start com.personal.clamscan
 ```zsh
 sudo santactl doctor
 ```
- 4. Create a local Santa config file
+ 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). If the NIST configuration profile blocks installation, remove that profile first, install this Santa profile, and then add the original MDM back.
+ 5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
 ```zsh
-sudo vi /Library/Preferences/com.northpolesec.santa.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <!-- General Settings -->
-    <key>ClientMode</key>
-    <integer>1</integer>
-    
-    <key>FailClosed</key>
-    <true/>
-    
-    <!-- GUI Settings -->
-    <key>BannedUSBBlockMessage</key>
-    <string>This USB device has been blocked by security policy. Please contact IT support if you need access.</string>
-    
-    <key>RemountUSBBlockMessage</key>
-    <string>This USB device has been remounted with restricted permissions for security purposes.</string>
-    
-    <key>FileAccessBlockMessage</key>
-    <string>Access to this file has been blocked by security policy. Please contact IT support if you need access.</string>
-    
-    <key>EnableNotificationSilences</key>
-    <false/>
-    
-    <!-- Rules Settings -->
-    <key>EnableBadSignatureProtection</key>
-    <true/>
-    
-    <key>EnablePageZeroProtection</key>
-    <true/>
-    
-    <key>EnableTransitiveRules</key>
-    <true/>
-    
-    <!-- Telemetry Settings -->
-    <key>EventLogType</key>
-    <string>file</string>
-</dict>
-</plist>
-```
- 5. Give permissions to edit the plist and restart Santa.
-```zsh
-sudo chmod 644 /Library/Preferences/com.northpolesec.santa.plist
-sudo chown root:wheel /Library/Preferences/com.northpolesec.santa.plist
-sudo launchctl kickstart -k system/com.northpolesec.santa.daemon
+santactl fileinfo /System/Applications/Dictionary.app 
+Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
+SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
+Bundle Name            : Dictionary
+Bundle Version         : 294
+Bundle Version Str     : 2.3.0
+Signing ID             : platform:com.apple.Dictionary
+
+# Better approach: use signing ID (will not change even with app update)
+sudo santactl rule \
+  --block \
+  --signingid \
+  --identifier platform:com.apple.Dictionary
 ```
 ```zsh
-santactl status
+sudo santactl rule --block --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
+# Added rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+
+sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+# Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f.
+```
+ 6. When importing/exporting rules, use:
+```zsh
+sudo santactl rule --export santa1.json
 ```
