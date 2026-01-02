@@ -360,7 +360,36 @@ int main(int argc, char *argv[]) {
 sudo gcc -o /usr/local/bin/clamav-wrapper /usr/local/bin/clamav-wrapper.c
 sudo chmod +x /usr/local/bin/clamav-wrapper
 ```
- 3. Create LaunchDaemon for daily scans (runs at 4am):
+ 3. Give wrapper permissions to run full-disk scans in the future (secure because this script is only manually triggered):
+```zsh
+sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
+
+sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
+#!/bin/bash
+/usr/local/bin/clamav-scan.sh /Users/admin
+EOF
+
+sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
+
+sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>ClamAVScan</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.clamav-scan</string>
+    <key>CFBundleName</key>
+    <string>ClamAVScan</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+```
+ 4. Add `/Applications/ClamAVScan.app` to FDA
+ 5. Create LaunchDaemon for daily scans (runs at 4am):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -373,7 +402,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
     <string>com.personal.clamscan</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/clamav-wrapper</string>
+        <string>/Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan</string>
     </array>
     <key>UserName</key>
     <string>admin</string>
@@ -396,7 +425,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
- 4. **Checkpoint** - Verify daily scan setup (also re-verifies Part 1):
+ 6. **Checkpoint** - Verify daily scan setup (also re-verifies Part 1):
 ```zsh
 # Re-verify daemons from Part 1
 sudo launchctl list | grep com.personal
@@ -618,6 +647,9 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+
 launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 
@@ -641,3 +673,69 @@ sudo launchctl start com.personal.clamscan
 
 <sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
 <sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
+
+## 2. Santa Setup
+ 1. Install the updated release from Northpole on [GitHub](https://northpole.dev/deployment/install-package/#releases)
+ 2. Grant permissions:
+    - "Login Items & Extensions" > "App Background Activity" add Santa.app
+    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" add Santa daemon
+    - "Login Items & Extensions" > "Extensions" > "By App" > should show "Santa" after restarting Settings
+    - "Privacy" > "Full Disk Access" enable Santa Security Extensions (will not show up until after restart)
+ 3. Check if Santa is running:
+```zsh
+sudo santactl doctor
+```
+ 4. Create a local Santa config file
+```zsh
+sudo vi /Library/Preferences/com.northpolesec.santa.plist
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- General Settings -->
+    <key>ClientMode</key>
+    <integer>1</integer>
+    
+    <key>FailClosed</key>
+    <true/>
+    
+    <!-- GUI Settings -->
+    <key>BannedUSBBlockMessage</key>
+    <string>This USB device has been blocked by security policy. Please contact IT support if you need access.</string>
+    
+    <key>RemountUSBBlockMessage</key>
+    <string>This USB device has been remounted with restricted permissions for security purposes.</string>
+    
+    <key>FileAccessBlockMessage</key>
+    <string>Access to this file has been blocked by security policy. Please contact IT support if you need access.</string>
+    
+    <key>EnableNotificationSilences</key>
+    <false/>
+    
+    <!-- Rules Settings -->
+    <key>EnableBadSignatureProtection</key>
+    <true/>
+    
+    <key>EnablePageZeroProtection</key>
+    <true/>
+    
+    <key>EnableTransitiveRules</key>
+    <true/>
+    
+    <!-- Telemetry Settings -->
+    <key>EventLogType</key>
+    <string>file</string>
+</dict>
+</plist>
+```
+ 5. Give permissions to edit the plist and restart Santa.
+```zsh
+sudo chmod 644 /Library/Preferences/com.northpolesec.santa.plist
+sudo chown root:wheel /Library/Preferences/com.northpolesec.santa.plist
+sudo launchctl kickstart -k system/com.northpolesec.santa.daemon
+```
+```zsh
+santactl status
+```
