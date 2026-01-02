@@ -6,6 +6,7 @@ WATCH_DIRS=(
   "$HOME"
 )
 LOG_FILE="$HOME/clamav-logs/onaccess-$(date +%F).log"
+QUARANTINE_DIR="$HOME/quarantine"
 CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
 EMAIL="yjwarrenwang@gmail.com"  # Change this; ignored if email not configured
 SCAN_TYPE="On-Access"
@@ -14,8 +15,8 @@ SCAN_TYPE="On-Access"
 RATE_LIMIT_SECONDS=60
 LAST_ALERT_FILE="/tmp/clamav-onaccess-last-alert"
 
-# Create log directory
-mkdir -p "$(dirname "$LOG_FILE")"
+# Create directories
+mkdir -p "$(dirname "$LOG_FILE")" "$QUARANTINE_DIR"
 
 # Function to check rate limiting
 should_alert() {
@@ -45,7 +46,7 @@ scan_file() {
   
   if [[ -S "$CLAMD_SOCKET" ]]; then
     local scan_result
-    scan_result=$(/opt/local/bin/clamdscan --no-summary "$file" 2>&1 || true)
+    scan_result=$(/opt/local/bin/clamdscan --no-summary --move="$QUARANTINE_DIR" "$file" 2>&1 || true)
     
     if echo "$scan_result" | grep -qi "FOUND"; then
       local virus_name
@@ -53,6 +54,7 @@ scan_file() {
       
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFECTED: $file" >> "$LOG_FILE"
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] Virus: $virus_name" >> "$LOG_FILE"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Moved to: $QUARANTINE_DIR" >> "$LOG_FILE"
       
       local file_dir file_name
       file_dir=$(dirname "$file")
@@ -76,13 +78,15 @@ File: $file
 Virus: $virus_name
 Time: $(date)
 
-ACTION REQUIRED: Delete this file immediately.
+The infected file has been moved to quarantine: $QUARANTINE_DIR
+
+Please review and delete the quarantined file.
 
 ---
 ClamAV ${SCAN_TYPE} Scanning" | mail -s "URGENT: ClamAV ${SCAN_TYPE} - Virus Detected!" "$EMAIL" 2>/dev/null
       } &
       
-      osascript -e 'tell application "System Events" to display notification "VIRUS FOUND: '"$file_name"' - Delete immediately!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null &
+      osascript -e 'tell application "System Events" to display notification "VIRUS FOUND: '"$file_name"' - Quarantined!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null &
       
       {
         BUTTON_RESULT=$(osascript <<EOF
@@ -94,13 +98,15 @@ ClamAV ${SCAN_TYPE} Scanning" | mail -s "URGENT: ClamAV ${SCAN_TYPE} - Virus Det
       
       File: $file_name
       Virus: $virus_name
-      Location: $file_dir
       
-      Delete this file immediately." buttons {"Open Folder", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
+      The file has been moved to quarantine:
+      $QUARANTINE_DIR
+      
+      Please review and delete." buttons {"Open Quarantine", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
       end tell
-      EOF
+EOF
       )
-        [[ "$BUTTON_RESULT" == *"Open Folder"* ]] && open "$file_dir"
+        [[ "$BUTTON_RESULT" == *"Open Quarantine"* ]] && open "$QUARANTINE_DIR"
       } &
       
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts spawned" >> "$LOG_FILE"
@@ -114,6 +120,7 @@ ClamAV ${SCAN_TYPE} Scanning" | mail -s "URGENT: ClamAV ${SCAN_TYPE} - Virus Det
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ClamAV ${SCAN_TYPE} Scanner Started" >> "$LOG_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring: ${WATCH_DIRS[*]}" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Quarantine: $QUARANTINE_DIR" >> "$LOG_FILE"
 
 /opt/local/bin/fswatch -0 -r \
   -e "\.git" \
