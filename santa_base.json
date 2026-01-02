@@ -1,0 +1,184 @@
+{
+  "rules" : [
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Dictionary",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Chess",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.AddressBook",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.FaceTime",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.games",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Home",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.journal",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.mail",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Maps",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.MobileSMS",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Music",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.mobilephone",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Photos",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.podcasts",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.reminders",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Siri",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.Stickies",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.stocks",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.helpviewer",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    },
+    {
+      "policy" : "BLOCKLIST",
+      "rule_type" : "SIGNINGID",
+      "custom_url" : "",
+      "identifier" : "platform:com.apple.TV",
+      "custom_msg" : "",
+      "comment" : "",
+      "cel_expr" : ""
+    }
+  ]
+}
