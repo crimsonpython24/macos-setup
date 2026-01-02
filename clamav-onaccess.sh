@@ -82,20 +82,25 @@ ACTION REQUIRED: Delete this file immediately.
 ClamAV ${SCAN_TYPE} Scanning" | mail -s "URGENT: ClamAV ${SCAN_TYPE} - Virus Detected!" "$EMAIL" 2>/dev/null
       } &
       
-      osascript -e "display notification \"VIRUS FOUND: $file_name - Delete immediately!\" with title \"ClamAV ${SCAN_TYPE} Alert\" sound name \"Basso\"" 2>/dev/null &
+      osascript -e 'tell application "System Events" to display notification "VIRUS FOUND: '"$file_name"' - Delete immediately!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null &
       
       {
-        BUTTON_RESULT=$(osascript -e "display dialog \"ClamAV ${SCAN_TYPE} Alert
-
-A virus was detected in real-time!
-
-File: $file_name
-Virus: $virus_name
-Location: $file_dir
-
-Delete this file immediately.\" buttons {\"Open Folder\", \"OK\"} default button 1 with title \"ClamAV ${SCAN_TYPE} Alert\" with icon caution giving up after 300" -e "button returned of result" 2>/dev/null || echo "OK")
-        
-        [[ "$BUTTON_RESULT" == "Open Folder" ]] && open "$file_dir"
+        BUTTON_RESULT=$(osascript <<EOF
+      tell application "System Events"
+        activate
+        display dialog "ClamAV ${SCAN_TYPE} Alert
+      
+      A virus was detected in real-time!
+      
+      File: $file_name
+      Virus: $virus_name
+      Location: $file_dir
+      
+      Delete this file immediately." buttons {"Open Folder", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
+      end tell
+      EOF
+      )
+        [[ "$BUTTON_RESULT" == *"Open Folder"* ]] && open "$file_dir"
       } &
       
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts spawned" >> "$LOG_FILE"
