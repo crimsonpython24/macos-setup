@@ -13,7 +13,7 @@ SCAN_TYPE="On-Access"
 
 # Rate limiting: minimum seconds between notifications
 RATE_LIMIT_SECONDS=60
-LAST_ALERT_FILE="/tmp/clamav-onaccess-last-alert"
+LAST_ALERT_FILE="/tmp/clamav-onaccess-last-alert-$(id -u)"
 
 # Create directories
 mkdir -p "$(dirname "$LOG_FILE")" "$QUARANTINE_DIR"
@@ -90,22 +90,22 @@ ClamAV ${SCAN_TYPE} Scanning" | mail -s "URGENT: ClamAV ${SCAN_TYPE} - Virus Det
       
       {
         BUTTON_RESULT=$(osascript <<EOF
-      tell application "System Events"
-        activate
-        display dialog "ClamAV ${SCAN_TYPE} Alert
-      
-      A virus was detected in real-time!
-      
-      File: $file_name
-      Virus: $virus_name
-      
-      The file has been moved to quarantine:
-      $QUARANTINE_DIR
-      
-      Please review and delete." buttons {"Open Quarantine", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
-      end tell
+tell application "System Events"
+  activate
+  display dialog "ClamAV ${SCAN_TYPE} Alert
+
+A virus was detected in real-time!
+
+File: $file_name
+Virus: $virus_name
+
+The file has been moved to quarantine:
+$QUARANTINE_DIR
+
+Please review and delete." buttons {"Open Quarantine", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
+end tell
 EOF
-      )
+        ) 2>/dev/null || echo "OK"
         [[ "$BUTTON_RESULT" == *"Open Quarantine"* ]] && open "$QUARANTINE_DIR"
       } &
       
