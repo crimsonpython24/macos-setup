@@ -124,7 +124,6 @@ profile:
       - os_time_server_enabled
       - os_touchid_prompt_disable
       - os_unlock_active_user_session_disable
-      - os_user_app_installation_prohibit
       - os_uucp_disable
       - os_writing_tools_disable
 
