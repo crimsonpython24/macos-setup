@@ -963,6 +963,7 @@ listen-address=::1,127.0.0.1
 cache-size=10000
 neg-ttl=300
 
+proxy-dnssec
 bind-interfaces
 bogus-priv
 domain-needed
@@ -1013,7 +1014,7 @@ resolver #1
   flags    : Request A records, Request AAAA records
   reach    : 0x00030002 (Reachable,Local Address,Directly Reachable Address)
 ```
- 6. Test if DNSSEC is working:
+ 7. Test if DNSSEC is working:
 ```zsh
 # This should resolve (DNSSEC-signed domain)
 dig @127.0.0.1 dnssec.works
@@ -1021,7 +1022,7 @@ dig @127.0.0.1 dnssec.works
 # This should FAIL (intentionally broken DNSSEC)
 dig @127.0.0.1 fail01.dnssec.works
 ```
- 7. Check if anonymous relays are working
+ 8. Check if anonymous relays are working
 ```zsh
 sudo lsof +c 15 -Pni UDP:54
 # dnscrypt-proxy 34325 root    7u  IPv4 0x3465ee788585df1c      0t0  UDP 127.0.0.1:54
