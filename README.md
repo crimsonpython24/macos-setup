@@ -804,3 +804,36 @@ sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615b
 ```zsh
 sudo santactl rule --export santa1.json
 ```
+
+## 4. DNS Stuffs
+### A) Hosts File
+ - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`; this step can also be done in Little Snitch.
+```zsh
+curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee -a /etc/hosts
+```
+
+### B) DNSCrypt
+ 1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
+ 2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
+ 3. Edit the file and change listening ports:
+```zsh
+sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+
+listen_addresses = ['127.0.0.1:53', '[::1]:53']
+server_names = ['mullvad-all-doh']
+
+sudo port unload dnscrypt-proxy
+sudo port load dnscrypt-proxy
+```
+```zsh
+sudo lsof +c 15 -Pni UDP:53
+COMMAND          PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+dnscrypt-proxy 90352 root    7u  IPv4  0x1a086975ded7a8d      0t0  UDP 127.0.0.1:53
+dnscrypt-proxy 90352 root    9u  IPv6 0xab08d4c4eb533b49      0t0  UDP [::1]:53
+```
+```zsh
+sudo vi /etc/resolv.conf
+
+nameserver ::1
+nameserver 127.0.0.1
+```
