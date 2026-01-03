@@ -813,27 +813,144 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 ```
 
 ### B) DNSCrypt
+> Some VPN applications override DNS settings on connect; may need to reconfigure VPN after setting up a local DNS server (change DNS to 127.0.0.1).
+
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
  3. Edit the file and change listening ports:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 
-listen_addresses = ['127.0.0.1:53', '[::1]:53']
+# Under "global settings"
+listen_addresses = ['127.0.0.1:54', '[::1]:54']
 server_names = ['mullvad-all-doh']
+bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
 
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
 ```zsh
-sudo lsof +c 15 -Pni UDP:53
-COMMAND          PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-dnscrypt-proxy 90352 root    7u  IPv4  0x1a086975ded7a8d      0t0  UDP 127.0.0.1:53
-dnscrypt-proxy 90352 root    9u  IPv6 0xab08d4c4eb533b49      0t0  UDP [::1]:53
+sudo lsof +c 15 -Pni UDP:54
+# dnscrypt-proxy 57409 root    7u  IPv4 0xf2ce17b711151ccc      0t0  UDP 127.0.0.1:54
+# dnscrypt-proxy 57409 root    9u  IPv6 0x8031285518513383      0t0  UDP [::1]:54
 ```
 ```zsh
 sudo vi /etc/resolv.conf
 
+# Edit
 nameserver ::1
 nameserver 127.0.0.1
 ```
+ 4. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
+```zsh
+# Sometimes system will not respect GUI settings
+sudo networksetup -setdnsservers "Wi-Fi" 127.0.0.1
+
+networksetup -getdnsservers "Wi-Fi"
+# 127.0.0.1
+
+scutil --dns | head -10
+# nameserver[1] : 127.0.0.1
+
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+```
+ 5. Extra configs:
+```zsh
+sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+
+ipv6_servers = true
+dnscrypt_servers = true
+doh_servers = true
+odoh_servers = false
+require_dnssec = true
+require_nolog = true
+require_nofilter = false
+ignore_system_dns = true
+
+# Ensure that this value is not lower (i.e. 40 minutes)
+cache_min_ttl = 2400
+```
+ 6. Since this guide uses port 54, there still will not be Internet connection until after section 4(C)
+
+### C) Dnsmasq
+ 1. Install Dnsmasq with `sudo port install dnsmasq` and let it run at startup with `sudo port load dnsmasq`.
+ 2. Confirm that nothing is running on port 53:
+```zsh
+sudo lsof +c 15 -Pni UDP:53
+```
+ 3. Again, find the configuration file with `port contents dnsmasq`, which usually is in `/opt/local/etc/dnsmasq.conf.example`. Edit the file:
+```zsh
+sudo vi /opt/local/etc/dnsmasq.conf
+
+# Find the keys' location and add these lines
+no-resolv
+server=127.0.0.1#54
+server=::1#54
+listen-address=::1,127.0.0.1
+cache-size=10000
+
+bogus-priv          # Never forward reverse lookups for private IP ranges
+domain-needed       # Never forward plain names (without dots)
+stop-dns-rebind     # Reject private IP responses from upstream (DNS rebinding protection)
+rebind-localhost-ok # But allow localhost (needed since upstream is localhost)
+```
+ 4. Reload Dnsmasq
+```zsh
+sudo port unload dnsmasq
+sudo port load dnsmasq
+
+sudo lsof +c 15 -Pni UDP:53
+# dnsmasq 76961 nobody    4u  IPv4 0x60d95e4a7e822dff      0t0  UDP 127.0.0.1:53
+# dnsmasq 76961 nobody    6u  IPv6 0xaff5c953c5375455      0t0  UDP [::1]:53
+```
+ 5. Flush previously remaining cache and check connection speed.
+```zsh
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+
+networksetup -getdnsservers "Wi-Fi"
+# 127.0.0.1
+
+scutil --dns | head -10
+# nameserver[1] : 127.0.0.1
+
+# First query (goes through the chain)
+dig @127.0.0.1 archlinux.org
+
+# Second query (should be faster - cached by dnsmasq)
+dig @127.0.0.1 archlinux.org
+```
+ 6. Verify DNS configuration.
+```zsh
+scutil --dns | head -10
+
+resolver #1
+  nameserver[0] : 127.0.0.1
+  flags    : Request A records, Request AAAA records
+  reach    : 0x00030002 (Reachable,Local Address,Directly Reachable Address)
+```
+ 6. Test if DNSSEC is working:
+```zsh
+# Test DNSSEC validation (should show 'ad' flag and NOERROR)
+dig +dnssec icann.org | head
+
+# Test DNSSEC failure detection (should show SERVFAIL)
+dig www.dnssec-failed.org | head
+```
+
+**Note** Debugging commands:
+```zsh
+log show --predicate 'process == "dnscrypt-proxy"' --last 5m
+curl -I https://google.com
+
+# Test if resolver is blocking domains itself
+dig @127.0.0.1 dnsleaktest.com
+dig @9.9.9.9 dnsleaktest.com
+```
+One might have to quit and restart Safari (while testing) with `killall Safari`.
+
+<sup>https://wiki.archlinux.org/title/Dnscrypt-proxy#Startup</sup></br>
+<sup>https://00f.net/2019/11/03/stop-using-low-dns-ttls/</sup></br>
+<sup>https://wiki.archlinux.org/title/Dnsmasq#DNS_addresses_file_and_forwarding</sup></br>
+<sup>https://github.com/drduh/macOS-Security-and-Privacy-Guide?tab=readme-ov-file#dnsmasq</sup>
