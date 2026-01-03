@@ -814,34 +814,122 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 
 ### B) DNSCrypt
 > Some VPN applications override DNS settings on connect; may need to reconfigure VPN after setting up a local DNS server (change DNS to 127.0.0.1).
+> No need to configure DNSSEC in this step; it will be handled with Dnsmasq.
 
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
  3. Edit the file and change listening ports:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+```
+```toml
+# /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 
-# Under "global settings"
 listen_addresses = ['127.0.0.1:54', '[::1]:54']
-server_names = ['mullvad-all-doh']
-bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
 
+# Auto-select servers based on filters (leave server_names commented)
+# server_names = []
+
+ipv4_servers = true
+ipv6_servers = false
+dnscrypt_servers = true
+doh_servers = false
+odoh_servers = false
+
+require_dnssec = true
+require_nolog = true
+require_nofilter = true
+
+# Disable resolvers whose operators run our relays
+disabled_server_names = [
+    'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
+    'scaleway-fr', 'scaleway-ams',
+    'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6', 'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
+]
+
+force_tcp = false
+timeout = 5000
+keepalive = 30
+
+dnscrypt_ephemeral_keys = true
+tls_disable_session_tickets = true
+
+bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
+ignore_system_dns = true
+netprobe_timeout = 60
+netprobe_address = '9.9.9.9:53'
+
+block_ipv6 = false
+block_unqualified = true
+block_undelegated = true
+reject_ttl = 10
+
+cache = true
+cache_size = 4096
+cache_min_ttl = 2400
+cache_max_ttl = 86400
+cache_neg_min_ttl = 60
+cache_neg_max_ttl = 600
+
+[sources.public-resolvers]
+urls = [
+    'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
+    'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md',
+]
+cache_file = 'public-resolvers.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 73
+prefix = ''
+
+[sources.relays]
+urls = [
+    'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
+    'https://download.dnscrypt.info/resolvers-list/v3/relays.md',
+]
+cache_file = 'relays.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 73
+prefix = ''
+
+[anonymized_dns]
+routes = [
+    { server_name='*', via=[
+        'anon-cs-de',
+        'anon-cs-nl',
+        'anon-cs-fr',
+        'anon-scaleway-ams',
+        'anon-kama',
+        'anon-ibksturm',
+        'anon-meganerd',
+        'anon-inconnu'
+    ]}
+]
+skip_incompatible = true
+```
+```zsh
+sudo vi /etc/resolv.conf
+
+# Edit
+nameserver 127.0.0.1
+nameserver ::1
+```
+```zsh
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
+```
+ 4. Check if current configuration is valid (will not run otherwise):
+```zsh
+sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -check
+
+# Run in foreground with verbose logging
+sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -loglevel 0
 ```
 ```zsh
 sudo lsof +c 15 -Pni UDP:54
 # dnscrypt-proxy 57409 root    7u  IPv4 0xf2ce17b711151ccc      0t0  UDP 127.0.0.1:54
 # dnscrypt-proxy 57409 root    9u  IPv6 0x8031285518513383      0t0  UDP [::1]:54
 ```
-```zsh
-sudo vi /etc/resolv.conf
-
-# Edit
-nameserver ::1
-nameserver 127.0.0.1
-```
- 4. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
+ 5. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
 ```zsh
 # Sometimes system will not respect GUI settings
 sudo networksetup -setdnsservers "Wi-Fi" 127.0.0.1
@@ -855,22 +943,6 @@ scutil --dns | head -10
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
 ```
- 5. Extra configs:
-```zsh
-sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
-
-ipv6_servers = true
-dnscrypt_servers = true
-doh_servers = true
-odoh_servers = false
-require_dnssec = true
-require_nolog = true
-require_nofilter = false
-ignore_system_dns = true
-
-# Ensure that this value is not lower (i.e. 40 minutes)
-cache_min_ttl = 2400
-```
  6. Since this guide uses port 54, there still will not be Internet connection until after section 4(C)
 
 ### C) Dnsmasq
@@ -882,18 +954,29 @@ sudo lsof +c 15 -Pni UDP:53
  3. Again, find the configuration file with `port contents dnsmasq`, which usually is in `/opt/local/etc/dnsmasq.conf.example`. Edit the file:
 ```zsh
 sudo vi /opt/local/etc/dnsmasq.conf
-
+```
+```conf
 # Find the keys' location and add these lines
-no-resolv
 server=127.0.0.1#54
 server=::1#54
 listen-address=::1,127.0.0.1
 cache-size=10000
+neg-ttl=300
 
-bogus-priv          # Never forward reverse lookups for private IP ranges
-domain-needed       # Never forward plain names (without dots)
-stop-dns-rebind     # Reject private IP responses from upstream (DNS rebinding protection)
-rebind-localhost-ok # But allow localhost (needed since upstream is localhost)
+bind-interfaces
+bogus-priv
+domain-needed
+stop-dns-rebind
+rebind-localhost-ok
+no-resolv
+no-poll
+min-port=1024
+strip-mac
+strip-subnet
+
+local=/local/
+local=/localhost/
+local=/home/
 ```
  4. Reload Dnsmasq
 ```zsh
@@ -932,11 +1015,27 @@ resolver #1
 ```
  6. Test if DNSSEC is working:
 ```zsh
-# Test DNSSEC validation (should show 'ad' flag and NOERROR)
-dig +dnssec icann.org | head
+# This should resolve (DNSSEC-signed domain)
+dig @127.0.0.1 dnssec.works
 
-# Test DNSSEC failure detection (should show SERVFAIL)
-dig www.dnssec-failed.org | head
+# This should FAIL (intentionally broken DNSSEC)
+dig @127.0.0.1 fail01.dnssec.works
+```
+ 7. Check if anonymous relays are working
+```zsh
+sudo lsof +c 15 -Pni UDP:54
+# dnscrypt-proxy 34325 root    7u  IPv4 0x3465ee788585df1c      0t0  UDP 127.0.0.1:54
+# dnscrypt-proxy 34325 root    9u  IPv6 0xd33867f6c28e6072      0t0  UDP [::1]:54
+
+log show --predicate 'process == "dnscrypt-proxy"' --last 5m
+# Filtering the log data using "process == "dnscrypt-proxy""
+
+sudo port unload dnscrypt-proxy
+sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+# Anonymized DNS: routing everything via [anon-cs-de anon-cs-nl anon-cs-fr anon-cs-austria anon-cs-barcelona anon-scaleway-ams anon-kama anon-dnscrypt.uk-ipv4 anon-v.dnscrypt.uk-ipv4 anon-ibksturm anon-meganerd anon-inconnu]
+# [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-brisbane-ipv4] via [anon-cs-nl]
+# [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-luxembourg-ipv4] via [anon-cs-fr]
+...
 ```
 
 **Note** Debugging commands:
