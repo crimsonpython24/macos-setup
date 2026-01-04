@@ -8,10 +8,6 @@ CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
 EMAIL="yjwarrenwang@gmail.com"
 SCAN_TYPE="On-Access"
 
-# Rate limiting: minimum seconds between notifications
-RATE_LIMIT_SECONDS=60
-LAST_ALERT_FILE="/tmp/clamav-onaccess-last-alert-$(id -u)"
-
 # Create directories
 mkdir -p "$(dirname "$LOG_FILE")" "$QUARANTINE_DIR"
 
@@ -113,23 +109,6 @@ EXISTING_PATHS=($(printf '%s\n' "${EXISTING_PATHS[@]}" | sort -u))
 # Functions
 # ============================================================================
 
-should_alert() {
-    local now
-    now=$(date +%s)
-    
-    if [[ -f "$LAST_ALERT_FILE" ]]; then
-        local last_time
-        last_time=$(cat "$LAST_ALERT_FILE" 2>/dev/null || echo "0")
-        local diff=$((now - last_time))
-        if [[ $diff -lt $RATE_LIMIT_SECONDS ]]; then
-            return 1
-        fi
-    fi
-    
-    echo "$now" > "$LAST_ALERT_FILE"
-    return 0
-}
-
 # Skip certain file types that are unlikely to be malware and cause noise
 should_skip_file() {
     local file="$1"
@@ -190,11 +169,6 @@ scan_file() {
             local file_dir file_name
             file_dir=$(dirname "$file")
             file_name=$(basename "$file")
-            
-            if ! should_alert "$file"; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rate limited - skipping alert" >> "$LOG_FILE"
-                return 0
-            fi
             
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sending alerts..." >> "$LOG_FILE"
             
