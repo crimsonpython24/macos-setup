@@ -56,8 +56,14 @@ Important: the security compliance project does **not** modify any system behavi
 
  > Unless otherwise specified, all commands here should be ran at the project base.
 
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`
- 2. Install dependencies, recommended within a virtual environment.
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
+```zsh
+cd build
+mkdir baselines && cd baselines
+sudo vi cnssi-1253_cust.yaml
+```
+ 2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
+ 3. Install dependencies, recommended within a virtual environment.
 ```zsh
 xcode-select --install
 sudo port install python314
@@ -71,7 +77,7 @@ source venv/bin/activate
 python3 -m pip install --upgrade pip
 pip3 install pyyaml xlwt
 ```
- 3. Optional: Load custom ODV values
+ 4. Optional: Load custom ODV values
 ```zsh
 cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
 odv:
@@ -88,7 +94,7 @@ odv:
   custom: 0
 EOF
 ```
- 4. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself.
+ 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (keep running the script even if it kills itself; it will eventually get all permissions).
 ```zsh
 python3 scripts/generate_guidance.py \
         -P \
@@ -96,12 +102,12 @@ python3 scripts/generate_guidance.py \
         -p \
     build/baselines/cnssi-1253_cust.yaml
 ```
- 5. Run the compliance script. If there is a previous profile installed, remove it in Settings before this step.
+ 6. Run the compliance script. If there is a previous profile installed, remove it in Settings before this step.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 6. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around 15%. Exit the tool.
- 7. Install the configuration profile (one might have to open the Settings app to install the profile):
+ 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around 15%. Exit the tool.
+ 8. Install the configuration profile (one might have to open the Settings app to install the profile):
 ```zsh
 # Re-run this line if any of the YAML fields are edited (e.g., new ODVs)
 python3 scripts/generate_guidance.py \
@@ -114,19 +120,19 @@ python3 scripts/generate_guidance.py \
 cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
 ```
- 8. If applicable, one way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 9. If not already, exit and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+ 9. After installing the profile, one way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 10. If not already, exit and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 10. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile. There will be a handful of them.
- 11. Exit the script and run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically return to the main menu.
- 12. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile. There will be a handful of them.
+ 12. Exit the script and run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically return to the main menu.
+ 13. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 13. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Firewall" > "Options", and the second one by searching "Filevault". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
+ 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -135,13 +141,14 @@ sudo pfctl -a '*' -sr | grep "block drop in all"
 # should output smt like "block drop in all" i.e. default deny all incoming
 sudo pfctl -s info
 ```
-```zsh
+```
+# checks filevault
 sudo fdesetup status
 ```
- 14. Note from previous step: one might encounter these two warnings
+ 15. Note from previous step: one might encounter these two warnings
    - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all
    - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 15. The script might still not yield 100% compliance, but all settings should be applied. Restart the device.
+ 16. The script should yield 100% compliance. Restart the device.
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
@@ -871,51 +878,59 @@ sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 ```toml
 # /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 
+# listener config
 listen_addresses = ['127.0.0.1:54', '[::1]:54']
 
-# Auto-select servers based on filters (leave server_names commented)
-# server_names = []
-
+# server selection
 ipv4_servers = true
 ipv6_servers = false
 dnscrypt_servers = true
 doh_servers = false
 odoh_servers = false
 
+# server requirements
 require_dnssec = true
 require_nolog = true
 require_nofilter = true
-lb_strategy = 'p2'
-lb_estimator = true
 dnssec_enforcement = true
 
-# Disable resolvers whose operators run our relays
+# load balancing server selection
+lb_strategy = 'p2'
+lb_estimator = true
+
+# disable resolvers whose operators also run anonymizing relays
+# prevents same operator from seeing both relay and resolver traffic
 disabled_server_names = [
     'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
     'scaleway-fr', 'scaleway-ams',
     'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6', 'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
 ]
 
+# connection settings
 force_tcp = false
 timeout = 5000
 keepalive = 30
 cert_refresh_delay = 240
 cert_ignore_timestamp = false
 
+# privacy hardening
 dnscrypt_ephemeral_keys = true
 tls_disable_session_tickets = true
 
+# fallbacks
 bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
 ignore_system_dns = true
 netprobe_timeout = 60
 netprobe_address = '9.9.9.9:53'
 
+# query filtering
 block_ipv6 = false
 block_unqualified = true
 block_undelegated = true
 reject_ttl = 10
 reject_private = true
 
+# cache
 cache = true
 cache_size = 4096
 cache_min_ttl = 2400
@@ -923,22 +938,24 @@ cache_max_ttl = 86400
 cache_neg_min_ttl = 60
 cache_neg_max_ttl = 600
 
+# =============================================
+# STATIC ROUTES (local domain handling)
+# =============================================
 [static]
 [static.'localhost']
 route = '127.0.0.1'
-
 [static.'*.local']
 route = '127.0.0.1'
-
 [static.'*.lan']
 route = '127.0.0.1'
-
 [static.'*.home']
 route = '127.0.0.1'
-
 [static.'*.internal']
 route = '127.0.0.1'
 
+# =============================================
+# RESOLVER SOURCES
+# =============================================
 [sources.public-resolvers]
 urls = [
     'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
@@ -959,6 +976,9 @@ minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 refresh_delay = 73
 prefix = ''
 
+# =============================================
+# ANONYMIZED DNS (relay thru 3p servers)
+# =============================================
 [anonymized_dns]
 routes = [
     { server_name='*', via=[
@@ -972,7 +992,6 @@ routes = [
         'anon-inconnu'
     ]}
 ]
-
 skip_incompatible = true
 direct_cert_fallback = false
 ```
@@ -1026,34 +1045,44 @@ sudo lsof +c 15 -Pni UDP:53
 sudo vi /opt/local/etc/dnsmasq.conf
 ```
 ```conf
-# Find the keys' location and add these lines
+# /opt/local/etc/dnsmasq.conf
+
+# upstream server
 server=127.0.0.1#54
 server=::1#54
+no-resolv
+no-poll
+
+# listener
 listen-address=::1,127.0.0.1
 bind-interfaces
 port=53
+local-service
 
+# cache
 cache-size=10000
 neg-ttl=300
-min-cache-ttl=2400
+min-cache-ttl=2400 # override low ttls
 max-cache-ttl=86400
 
+# dnssec
 proxy-dnssec
-bogus-priv
-domain-needed
+dnssec*
+dnssec-check-unsigned
+
+# security hardening
 stop-dns-rebind
 rebind-localhost-ok
-no-resolv
-no-poll
+domain-needed
+bogus-priv
 min-port=1024
+edns-packet-max=1232
+
+# privacy
 strip-mac
 strip-subnet
 
-dnssec
-dnssec-check-unsigned
-
-local-service
-
+# local tld blocking
 local=/local/
 local=/localhost/
 local=/home/
@@ -1063,8 +1092,6 @@ local=/corp/
 local=/private/
 local=/test/
 local=/invalid/
-
-edns-packet-max=1232
 ```
  4. Reload Dnsmasq
 ```zsh
