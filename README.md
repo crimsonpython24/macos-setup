@@ -804,20 +804,28 @@ sudo santactl doctor
 ```zsh
 sudo open santa.mobileconfig
 ```
- 6. **Important for Lockdown mode**: Before the profile takes effect, allowlist critical binaries:
+6. **Important for Lockdown mode**: Before the profile takes effect, allowlist critical binaries:
 ```zsh
 # Export current state as baseline
 sudo santactl rule --export ~/santa-pre-lockdown.json
 
-# Allowlist your shell and common tools by Team ID (survives updates)
-santactl fileinfo /bin/zsh | grep "Team ID"
+# Apple platform binaries (signed with "platform:" prefix) are typically
+# allowed by default. Verify with:
+santactl fileinfo /bin/zsh
+# Look for: Signing ID: platform:com.apple.zsh
 
-# Allowlist all binaries from Apple
-sudo santactl rule --allow --teamid APPL
+# If Apple binaries are being blocked, allowlist by certificate:
+sudo santactl rule --allow --certificate --sha256 \
+  $(santactl fileinfo /bin/zsh | grep "SHA-256" | head -1 | awk '{print $NF}')
 
-# Allowlist MacPorts binaries (check the signing info first)
+# For MacPorts binaries - allowlist the MacPorts certificate
 santactl fileinfo /opt/local/bin/bash
+# Note the certificate SHA-256 from the signing chain
 sudo santactl rule --allow --certificate --sha256 <cert-sha256-from-above>
+
+# For third-party apps (e.g., VS Code), use Team ID:
+santactl fileinfo /Applications/Visual\ Studio\ Code.app | grep "Team ID"
+sudo santactl rule --allow --teamid <team-id>
 ```
 
  7. Verify Santa is in Lockdown mode:
@@ -877,6 +885,9 @@ odoh_servers = false
 require_dnssec = true
 require_nolog = true
 require_nofilter = true
+lb_strategy = 'p2'
+lb_estimator = true
+dnssec_enforcement = true
 
 # Disable resolvers whose operators run our relays
 disabled_server_names = [
@@ -888,6 +899,8 @@ disabled_server_names = [
 force_tcp = false
 timeout = 5000
 keepalive = 30
+cert_refresh_delay = 240
+cert_ignore_timestamp = false
 
 dnscrypt_ephemeral_keys = true
 tls_disable_session_tickets = true
@@ -901,6 +914,7 @@ block_ipv6 = false
 block_unqualified = true
 block_undelegated = true
 reject_ttl = 10
+reject_private = true
 
 cache = true
 cache_size = 4096
@@ -908,6 +922,22 @@ cache_min_ttl = 2400
 cache_max_ttl = 86400
 cache_neg_min_ttl = 60
 cache_neg_max_ttl = 600
+
+[static]
+[static.'localhost']
+route = '127.0.0.1'
+
+[static.'*.local']
+route = '127.0.0.1'
+
+[static.'*.lan']
+route = '127.0.0.1'
+
+[static.'*.home']
+route = '127.0.0.1'
+
+[static.'*.internal']
+route = '127.0.0.1'
 
 [sources.public-resolvers]
 urls = [
@@ -933,7 +963,7 @@ prefix = ''
 routes = [
     { server_name='*', via=[
         'anon-cs-de',
-        'anon-cs-nl',
+        'anon-cs-nl', 
         'anon-cs-fr',
         'anon-scaleway-ams',
         'anon-kama',
@@ -942,7 +972,9 @@ routes = [
         'anon-inconnu'
     ]}
 ]
+
 skip_incompatible = true
+direct_cert_fallback = false
 ```
 ```zsh
 sudo vi /etc/resolv.conf
@@ -998,11 +1030,15 @@ sudo vi /opt/local/etc/dnsmasq.conf
 server=127.0.0.1#54
 server=::1#54
 listen-address=::1,127.0.0.1
+bind-interfaces
+port=53
+
 cache-size=10000
 neg-ttl=300
+min-cache-ttl=2400
+max-cache-ttl=86400
 
 proxy-dnssec
-bind-interfaces
 bogus-priv
 domain-needed
 stop-dns-rebind
@@ -1013,9 +1049,22 @@ min-port=1024
 strip-mac
 strip-subnet
 
+dnssec
+dnssec-check-unsigned
+
+local-service
+
 local=/local/
 local=/localhost/
 local=/home/
+local=/lan/
+local=/internal/
+local=/corp/
+local=/private/
+local=/test/
+local=/invalid/
+
+edns-packet-max=1232
 ```
  4. Reload Dnsmasq
 ```zsh
