@@ -800,34 +800,48 @@ sudo launchctl start com.personal.clamscan
 sudo santactl doctor
 ```
  4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). If the NIST configuration profile blocks installation, remove that profile first, install this Santa profile, and then add the original MDM back.
- 5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
+ 5. Install the Santa configuration profile:
 ```zsh
-santactl fileinfo /System/Applications/Dictionary.app 
-Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
-SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
-Bundle Name            : Dictionary
-Bundle Version         : 294
-Bundle Version Str     : 2.3.0
-Signing ID             : platform:com.apple.Dictionary
+sudo open santa.mobileconfig
+```
+ 6. **Important for Lockdown mode**: Before the profile takes effect, allowlist critical binaries:
+```zsh
+# Export current state as baseline
+sudo santactl rule --export ~/santa-pre-lockdown.json
 
-# Better approach: use signing ID (will not change even with app update)
+# Allowlist your shell and common tools by Team ID (survives updates)
+santactl fileinfo /bin/zsh | grep "Team ID"
+
+# Allowlist all binaries from Apple
+sudo santactl rule --allow --teamid APPL
+
+# Allowlist MacPorts binaries (check the signing info first)
+santactl fileinfo /opt/local/bin/bash
+sudo santactl rule --allow --certificate --sha256 <cert-sha256-from-above>
+```
+
+ 7. Verify Santa is in Lockdown mode:
+```zsh
+santactl status | grep "Client Mode"
+# Client Mode                    | Lockdown
+```
+
+ 8. Handling blocked applications:
+```zsh
+# Check what was blocked recently
+log show --predicate 'subsystem == "com.northpolesec.santa"' --last 1h | grep DENY
+
+# Allowlist by signing ID (preferred - survives updates)
 sudo santactl rule \
-  --block \
+  --allow \
   --signingid \
-  --identifier platform:com.apple.Dictionary
+  --identifier platform:com.apple.TextEdit
 ```
-```zsh
-sudo santactl rule --block --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
-# Added rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 
-sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-# Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f.
-```
- 6. When importing/exporting rules, use:
-```zsh
-sudo santactl rule --export santa1.json
-```
+ 9. USB behavior with current config:
+    - USB storage devices mount as **read-only** with **noexec**
+    - You can read files but cannot execute anything from USB
+    - To temporarily allow: remove the profile, use USB, reinstall profile
 
 ## 4. DNS Stuffs
 ### A) Hosts File
