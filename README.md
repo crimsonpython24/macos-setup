@@ -215,21 +215,24 @@ LogVerbose yes
 LogFileMaxSize 10M
 
 # Add to end (exclusions for performance)
-ExcludePath ^/.*/\.git/
-ExcludePath ^/.*/node_modules/
-ExcludePath ^/.*/Library/Caches
-ExcludePath ^/.*\.Trash
-ExcludePath ^/.*/Library/Application Support/Knowledge
-ExcludePath ^/.*/Library/Application Support/com.apple.TCC
-ExcludePath ^/.*/Library/Application Support/AddressBook
-ExcludePath ^/.*/Library/Application Support/FaceTime
-ExcludePath ^/.*/Library/Application Support/CallHistoryDB
-ExcludePath ^/.*/Library/Autosave Information
-ExcludePath ^/.*\.viminfo$
-ExcludePath ^/.*\.bnnsir$
-ExcludePath ^/.*/Library/Group Containers
-ExcludePath ^/.*/Library/Daemon Containers
-ExcludePath ^/.*/Library/Biome
+ExcludePath ^/Users/.*/\.git/
+ExcludePath ^/Users/.*/node_modules/
+ExcludePath ^/Users/.*/Library/Caches/
+ExcludePath ^/Users/.*/\.Trash/
+ExcludePath ^/Users/.*/Library/Application Support/Knowledge/
+ExcludePath ^/Users/.*/Library/Application Support/com\.apple\.TCC/
+ExcludePath ^/Users/.*/Library/Application Support/AddressBook/
+ExcludePath ^/Users/.*/Library/Application Support/FaceTime/
+ExcludePath ^/Users/.*/Library/Application Support/CallHistoryDB/
+ExcludePath ^/Users/.*/Library/Autosave Information/
+ExcludePath ^/Users/.*/\.viminfo$
+ExcludePath ^/Users/.*/\.bnnsir$
+ExcludePath ^/Users/.*/Library/Group Containers/
+ExcludePath ^/Users/.*/Library/Daemon Containers/
+ExcludePath ^/Users/.*/Library/Biome/
+ExcludePath ^/private/var/folders/
+ExcludePath ^/System/
+ExcludePath ^/usr/
 ```
 
 6. Run `freshclam` *without sudo* to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 9.
@@ -695,7 +698,30 @@ tail -5 ~/clamav-logs/onaccess-$(date +%F).log
 # Expected: Shows "Clean" for clean-file-test.txt
 ```
 
----
+### Part 5: Log Rotation
+
+1. Create newsyslog configuration for ClamAV:
+```zsh
+sudo tee /etc/newsyslog.d/clamav.conf << 'EOF'
+# ClamAV log rotation - rotate weekly, keep 7 days
+/opt/local/var/log/clamav/clamd.log          644  7     *    @T00  J     /opt/local/var/run/clamav/clamd.pid
+/opt/local/var/log/clamav/freshclam.log      644  7     *    @T00  J
+/Users/admin/clamav-logs/*.log               644  7     *    @T00  J
+/Users/warren/clamav-logs/*.log              644  7     *    @T00  J
+EOF
+```
+
+2. The system will automatically rotate logs. To manually trigger:
+```zsh
+sudo newsyslog -v
+```
+
+3. Add cleanup to the daily scan script by appending before the exit (or create a separate cron):
+```zsh
+# Add to clamav-scan.sh or run manually
+find ~/clamav-logs -name "*.log" -mtime +7 -delete
+find ~/quarantine -mtime +30 -delete
+```
 
 ### Cleanup: Remove Default MacPorts Services
 
@@ -710,8 +736,6 @@ sudo rm -f /Library/LaunchDaemons/org.macports.ClamavScanSchedule.plist
 sudo launchctl list | grep org.macports
 # Should be empty
 ```
-
----
 
 ### Ref: Restart Commands
 
@@ -1037,6 +1061,30 @@ sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnsc
 # [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-brisbane-ipv4] via [anon-cs-nl]
 # [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-luxembourg-ipv4] via [anon-cs-fr]
 ...
+```
+### Persisting resolv.conf
+> macOS may overwrite `/etc/resolv.conf` on network changes. Lock it with the immutable flag:
+
+```zsh
+# Set correct content
+sudo tee /etc/resolv.conf << 'EOF'
+nameserver 127.0.0.1
+nameserver ::1
+EOF
+
+# Make immutable
+sudo chflags schg /etc/resolv.conf
+
+# Verify
+ls -lO /etc/resolv.conf
+# should show "schg" flag
+```
+
+```zsh
+# To edit later
+sudo chflags noschg /etc/resolv.conf
+...
+sudo chflags schg /etc/resolv.conf
 ```
 
 **Note** Debugging commands:
