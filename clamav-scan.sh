@@ -19,6 +19,12 @@ SCAN_LOG="$LOG_DIR/scan-$(date +%F).log"
 # Temporary file for scan results
 SCAN_RESULT_FILE=$(mktemp)
 
+# Cleanup function
+cleanup() {
+    rm -f "$SCAN_RESULT_FILE"
+}
+trap cleanup EXIT
+
 # Auto-detect clamscan location
 CLAMSCAN=""
 for p in \
@@ -35,6 +41,14 @@ done
 if [[ -z "$CLAMSCAN" ]]; then
   echo "[!] clamscan not found. Please check your installation path." >&2
   exit 2
+fi
+
+# Check if virus database exists
+DB_DIR="/opt/local/share/clamav"
+if [[ ! -f "$DB_DIR/main.cvd" ]] && [[ ! -f "$DB_DIR/main.cld" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Virus database not found in $DB_DIR" | tee -a "$SCAN_LOG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Run: sudo freshclam" | tee -a "$SCAN_LOG"
+    exit 1
 fi
 
 echo "============================================" | tee -a "$SCAN_LOG"
@@ -88,7 +102,7 @@ if [[ "$INFECTED_COUNT" -gt 0 ]]; then
   
   # Send email (fails silently if email not configured)
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sending email alert..." | tee -a "$SCAN_LOG"
-  {
+  if {
     echo "ClamAV ${SCAN_TYPE} Alert"
     echo "========================"
     echo ""
@@ -102,15 +116,20 @@ if [[ "$INFECTED_COUNT" -gt 0 ]]; then
     echo ""
     echo "--- Full Scan Results ---"
     cat "$SCAN_RESULT_FILE"
-  } | mail -s "URGENT: ClamAV ${SCAN_TYPE} - $INFECTED_COUNT Infected File(s) Found!" "$EMAIL" 2>/dev/null || true
+  } | mail -s "URGENT: ClamAV ${SCAN_TYPE} - $INFECTED_COUNT Infected File(s) Found!" "$EMAIL" 2>/dev/null; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Email sent successfully" | tee -a "$SCAN_LOG"
+  else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Email sending failed (postfix may not be configured)" | tee -a "$SCAN_LOG"
+  fi
   
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Email queued" | tee -a "$SCAN_LOG"
-  
-  # Show notifications in background (non-blocking)
+  # Show notifications - these run in foreground but with timeouts
+  # Note: AbandonProcessGroup in the plist allows these to complete even after script exits
   (
+    # Notification
     osascript -e 'tell application "System Events" to display notification "'"$INFECTED_COUNT"' infected file(s) found and quarantined!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null || true
     
-    osascript <<EOF
+    # Dialog
+    osascript <<EOF 2>/dev/null || true
 tell application "System Events"
   activate
   display dialog "ClamAV ${SCAN_TYPE} Alert
@@ -128,13 +147,11 @@ To clean up quarantine:
 Please review and delete immediately." buttons {"OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
 end tell
 EOF
-  ) 2>/dev/null &
+  ) &
   
-  disown
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts sent" | tee -a "$SCAN_LOG"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts spawned" | tee -a "$SCAN_LOG"
 else
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Scan complete - No infections found" | tee -a "$SCAN_LOG"
 fi
 
-# Cleanup
-rm -f "$SCAN_RESULT_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Daily scan finished" | tee -a "$SCAN_LOG"
