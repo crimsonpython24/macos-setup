@@ -8,8 +8,57 @@ CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
 EMAIL="yjwarrenwang@gmail.com"
 SCAN_TYPE="On-Access"
 
+# Socket wait configuration
+MAX_WAIT_SECONDS=120
+WAIT_INTERVAL=5
+
 # Create directories
 mkdir -p "$(dirname "$LOG_FILE")" "$QUARANTINE_DIR"
+
+# ============================================================================
+# Wait for clamd socket to be ready (fixes post-restart issues)
+# ============================================================================
+wait_for_clamd() {
+    local waited=0
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Waiting for clamd socket at $CLAMD_SOCKET..." >> "$LOG_FILE"
+    
+    while [[ ! -S "$CLAMD_SOCKET" ]]; do
+        if [[ $waited -ge $MAX_WAIT_SECONDS ]]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: clamd socket not available after ${MAX_WAIT_SECONDS}s" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Please ensure clamd is running: sudo launchctl list | grep clamd" >> "$LOG_FILE"
+            exit 1
+        fi
+        sleep $WAIT_INTERVAL
+        waited=$((waited + WAIT_INTERVAL))
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Still waiting for clamd socket... (${waited}s elapsed)" >> "$LOG_FILE"
+    done
+    
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Socket found, verifying clamd is responding..." >> "$LOG_FILE"
+    
+    # Verify clamd is actually responding by checking version (more reliable than --ping)
+    local retries=0
+    local max_retries=30
+    while true; do
+        # Try to get version - this confirms clamd is accepting connections
+        if /opt/local/bin/clamdscan --version >/dev/null 2>&1; then
+            break
+        fi
+        
+        if [[ $retries -ge $max_retries ]]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: clamd socket exists but daemon not responding after $max_retries retries" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Try: sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist && sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist" >> "$LOG_FILE"
+            exit 1
+        fi
+        
+        sleep 2
+        retries=$((retries + 1))
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Waiting for clamd to respond... (retry $retries/$max_retries)" >> "$LOG_FILE"
+    done
+    
+    local version
+    version=$(/opt/local/bin/clamdscan --version 2>/dev/null || echo "unknown")
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] clamd is ready! Version: $version" >> "$LOG_FILE"
+}
 
 # ============================================================================
 # Watch Paths Configuration
@@ -232,7 +281,12 @@ EOF
 # ============================================================================
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ============================================" >> "$LOG_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ClamAV ${SCAN_TYPE} Scanner Started" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ClamAV ${SCAN_TYPE} Scanner Starting..." >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ============================================" >> "$LOG_FILE"
+
+# Wait for clamd to be ready before starting (fixes post-restart issues)
+wait_for_clamd
+
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Monitoring ${#EXISTING_PATHS[@]} paths:" >> "$LOG_FILE"
 for p in "${EXISTING_PATHS[@]}"; do
     echo "[$(date '+%Y-%m-%d %H:%M:%S')]   - $p" >> "$LOG_FILE"
