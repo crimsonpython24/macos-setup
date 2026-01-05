@@ -23,7 +23,7 @@ WATCH_PATHS=(
     # Temporary directories
     "/tmp"
     "/private/tmp"
-    "$TMPDIR"
+    "${TMPDIR:-/tmp}"
     
     # Browser data (downloads, cache, extensions)
     "$HOME/Library/Application Support/Google/Chrome"
