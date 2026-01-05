@@ -237,11 +237,11 @@ ExcludePath ^/Users/.*/Library/Preferences/com\.apple\.MobileSMS\.plist$
 ExcludePath ^/Users/.*/quarantine/
 ExcludePath ^/var/root/quarantine/
 ```
- 5. Run `freshclam` to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8. This command requires sudo beacuse it runs across users as `root`.
+ 5. Run `freshclam` to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8. This command requires sudo because it runs across users as `root`.
 ```zsh
 sudo freshclam
 ```
- 6. Wrap `clamd` inside an application to give it FDA access (MacOS Tahoe 26+, remember to give FDA in Settings after this step):
+ 6. Wrap `clamd` inside an application to give it FDA access (macOS Tahoe 26+, remember to give FDA in Settings after this step):
 ```zsh
 sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
 
@@ -406,9 +406,9 @@ clamdscan -i eicar-test.txt
 rm -f eicar-test.txt
 ```
 
-**Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
+**Note:** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
 
-**Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
+**Note:** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
 
 ### Part 1-1: Ensuring that Warren also gets his dear permissions
  1. Add MacPorts to warren's PATH (both `.zshrc` and `.zprofile` for interactive and login shells):
@@ -509,6 +509,8 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
         <key>Minute</key>
         <integer>0</integer>
     </dict>
+    <key>AbandonProcessGroup</key>
+    <true/>
     <key>StandardOutPath</key>
     <string>/opt/local/var/log/clamav/clamscan-stdout.log</string>
     <key>StandardErrorPath</key>
@@ -516,11 +518,14 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 </dict>
 </plist>
 ```
+
+> **Important:** The `AbandonProcessGroup` key is required because the scan script spawns background processes (osascript dialogs). Without this key, launchd will kill these child processes when the main script exits, preventing notifications from displaying.
+
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
- 5. If LaunchDaemon times are changed, remember to restart Clamscan.
-```
+ 5. If LaunchDaemon times are changed, remember to restart Clamscan:
+```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -558,11 +563,11 @@ sudo bash -c 'rm -rf /var/root/quarantine/*'
 > Skip this section if you don't want email alerts. The scan scripts will work fine without email - alerts simply won't be sent.
 
  1. To generate a Gmail App Password:
-   - Go to https://myaccount.google.com/security
-   - Enable 2-Step Verification if not already enabled
-   - Search for "App passwords"
-   - Generate a new app password for "Mail"
-   - Use that 16-character password in the file above
+    - Go to https://myaccount.google.com/security
+    - Enable 2-Step Verification if not already enabled
+    - Search for "App passwords"
+    - Generate a new app password for "Mail"
+    - Use that 16-character password in the file above
  2. Create SASL password file:
 ```zsh
 sudo vi /etc/postfix/sasl_passwd
@@ -638,6 +643,8 @@ sudo bash -c 'rm -rf /var/root/quarantine/*'
 
 > **Multi-User Note:** On-access scanning runs per-user via LaunchAgents. Each user gets their own instance that monitors their own directories.
 
+> **Important:** The on-access script includes a wait-for-socket mechanism that ensures clamd is fully ready before starting. This prevents issues after system restarts where the script would previously need manual execution.
+
  1. Install `fswatch`:
 ```zsh
 sudo port install fswatch
@@ -709,6 +716,9 @@ vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 </dict>
 </plist>
 ```
+
+> **Note:** The on-access script has built-in logic to wait up to 120 seconds for the clamd socket to become available after a restart. This eliminates the need for manual script execution after system boots.
+
 ```zsh
 # Load for admin user
 launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
@@ -831,7 +841,7 @@ ls -la /Users/warren/clamav-logs/
 # Expected: scan-YYYY-MM-DD.log and onaccess-YYYY-MM-DD.log in each
 ```
 
-**Note** If testing for daily scan at this step, make sure that all on-access processes are killed, across all users:
+**Note:** If testing for daily scan at this step, make sure that all on-access processes are killed, across all users:
 ```zsh
 ps aux | grep fswatch | grep -v grep
 sudo kill -9 <PID>
@@ -910,6 +920,25 @@ exit
 | Daily scan | LaunchDaemon | root | Scans all users | Yes (ClamAVScan.app) |
 | On-access (admin) | LaunchAgent | admin | admin's files | Yes (ClamAVOnAccess.app) |
 | On-access (warren) | LaunchAgent | warren | warren's files | Yes (ClamAVOnAccess.app) |
+
+### Ref: Troubleshooting
+
+**Daily scan doesn't run automatically:**
+1. Verify the plist has `AbandonProcessGroup` set to `true`
+2. Check if the system was asleep at the scheduled time (macOS won't wake for StartCalendarInterval)
+3. Verify the daemon is loaded: `sudo launchctl list | grep clamscan`
+4. Check logs: `sudo tail -50 /opt/local/var/log/clamav/clamscan-stderr.log`
+
+**On-access doesn't work after restart:**
+1. Check if the script is waiting for clamd: `tail -f ~/clamav-logs/onaccess-$(date +%F).log`
+2. Verify clamd is running: `sudo launchctl list | grep clamd`
+3. Test clamd responsiveness: `clamdscan --ping`
+4. If stuck waiting, restart clamd first, then the on-access agent
+
+**Scripts need manual execution after restart:**
+This should be fixed with the updated on-access script that waits for clamd. If still occurring:
+1. Ensure you're using the updated `clamav-onaccess.sh` with the `wait_for_clamd` function
+2. Increase `MAX_WAIT_SECONDS` if your system takes longer to start clamd
 
 <sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
 <sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
