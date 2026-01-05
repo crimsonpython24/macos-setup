@@ -771,8 +771,9 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 > No need to configure DNSSEC in this step; it will be handled with Dnsmasq.
 
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
- 2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
- 3. Edit the file and change listening ports:
+ 2. Because there will be no connection until section 3(C) is configured, first install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
+ 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
+ 4. Edit the file and change listening ports:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 ```
@@ -793,7 +794,6 @@ odoh_servers = false
 require_dnssec = true
 require_nolog = true
 require_nofilter = true
-dnssec_enforcement = true
 
 # load balancing server selection
 lb_strategy = 'p2'
@@ -829,7 +829,6 @@ block_ipv6 = false
 block_unqualified = true
 block_undelegated = true
 reject_ttl = 10
-reject_private = true
 
 # cache
 cache = true
@@ -839,24 +838,7 @@ cache_max_ttl = 86400
 cache_neg_min_ttl = 60
 cache_neg_max_ttl = 600
 
-# =============================================
-# STATIC ROUTES (local domain handling)
-# =============================================
-[static]
-[static.'localhost']
-route = '127.0.0.1'
-[static.'*.local']
-route = '127.0.0.1'
-[static.'*.lan']
-route = '127.0.0.1'
-[static.'*.home']
-route = '127.0.0.1'
-[static.'*.internal']
-route = '127.0.0.1'
-
-# =============================================
-# RESOLVER SOURCES
-# =============================================
+# resolver sources (replace existing config)
 [sources.public-resolvers]
 urls = [
     'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
@@ -877,9 +859,7 @@ minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 refresh_delay = 73
 prefix = ''
 
-# =============================================
-# ANONYMIZED DNS (relay thru 3p servers)
-# =============================================
+# anonymized dns (relay thru 3p servers)
 [anonymized_dns]
 routes = [
     { server_name='*', via=[
@@ -897,19 +877,13 @@ skip_incompatible = true
 direct_cert_fallback = false
 ```
 ```zsh
-sudo vi /etc/resolv.conf
-
-# Edit
-nameserver 127.0.0.1
-nameserver ::1
-```
-```zsh
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
  4. Check if current configuration is valid (will not run otherwise):
 ```zsh
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -check
+# Remember to reload dnscrypt-proxy after toml change
 
 # Run in foreground with verbose logging
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -loglevel 0
@@ -933,149 +907,184 @@ scutil --dns | head -10
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
 ```
- 6. Since this guide uses port 54, there still will not be Internet connection until after section 4(C)
+ 6. Again, since this guide routes `dnscrypt-proxy` to port 54, there still will not be Internet connection until after section 4(C)
 
-### C) Dnsmasq
- 1. Install Dnsmasq with `sudo port install dnsmasq` and let it run at startup with `sudo port load dnsmasq`.
- 2. Confirm that nothing is running on port 53:
+### C) Unbound
+> The original guide uses `dnsmasq`; however, Dnsmasq will not reload `ad` (authenticated data) in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
+
+ 1. Unbound should already be installed in 4(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
+ 2. Create directories and configurations.
 ```zsh
-sudo lsof +c 15 -Pni UDP:53
-```
- 3. Again, find the configuration file with `port contents dnsmasq`, which usually is in `/opt/local/etc/dnsmasq.conf.example`. Edit the file:
-```zsh
-sudo vi /opt/local/etc/dnsmasq.conf
+sudo mkdir -p /opt/local/etc/unbound
+port contents unbound | grep unbound.conf
+sudo vi /opt/local/etc/unbound/unbound.conf
 ```
 ```conf
-# /opt/local/etc/dnsmasq.conf
+# /opt/local/etc/unbound/unbound.conf
 
-# upstream server
-server=127.0.0.1#54
-server=::1#54
-no-resolv
-no-poll
+server:
+    # Listener (equivalent to dnsmasq listen-address and port)
+    interface: 127.0.0.1
+    interface: ::1
+    port: 53
+    do-ip4: yes
+    do-ip6: yes
+    do-udp: yes
+    do-tcp: yes
+    
+    # Bind to specific interfaces only (equivalent to bind-interfaces)
+    interface-automatic: no
+    access-control: 127.0.0.0/8 allow
+    access-control: ::1 allow
+    access-control: 0.0.0.0/0 refuse
+    access-control: ::0/0 refuse
+    
+    # Cache settings (migrated from dnsmasq cache config)
+    cache-min-ttl: 2400
+    cache-max-ttl: 86400
+    serve-expired-ttl: 300
+    msg-cache-size: 50m
+    rrset-cache-size: 100m
+    neg-cache-size: 10m
+    
+    # DNSSEC validation (replaces proxy-dnssec with real validation)
+    module-config: "validator iterator"
+    auto-trust-anchor-file: "/opt/local/etc/unbound/root.key"
+    val-clean-additional: yes
+    val-permissive-mode: no
+    
+    # Security hardening (migrated from dnsmasq security settings)
+    # DNS rebinding protection (stop-dns-rebind equivalent)
+    private-address: 10.0.0.0/8
+    private-address: 172.16.0.0/12
+    private-address: 192.168.0.0/16
+    private-address: 169.254.0.0/16
+    private-address: fd00::/8
+    private-address: fe80::/10
+    private-address: 127.0.0.0/8
+    private-address: ::1/128
+    
+    # But allow localhost queries (rebind-localhost-ok equivalent)
+    private-domain: "localhost."
+    private-domain: "127.in-addr.arpa."
+    
+    # Harden against algorithm downgrade attacks
+    harden-algo-downgrade: yes
+    harden-below-nxdomain: yes
+    harden-dnssec-stripped: yes
+    harden-glue: yes
+    harden-large-queries: yes
+    harden-referral-path: yes
+    harden-short-bufsize: yes
+    
+    # Reject queries for unqualified names (domain-needed equivalent)
+    do-not-query-localhost: no
+    
+    # EDNS buffer size (edns-packet-max equivalent)
+    edns-buffer-size: 1232
+    max-udp-size: 1232
+    
+    # Outbound port range (min-port equivalent)
+    outgoing-port-permit: 1024-65535
+    outgoing-port-avoid: 0-1023
+    
+    # Privacy features (strip-mac, strip-subnet equivalents)
+    qname-minimisation: yes
+    qname-minimisation-strict: no
+    aggressive-nsec: yes
+    hide-identity: yes
+    hide-version: yes
+    
+    # Performance tuning
+    num-threads: 2
+    msg-cache-slabs: 4
+    rrset-cache-slabs: 4
+    infra-cache-slabs: 4
+    key-cache-slabs: 4
+    so-reuseport: yes
+    
+    # Prefetch popular items before they expire
+    prefetch: yes
+    prefetch-key: yes
+    
+    # Local TLD blocking (local=/domain/ equivalents)
+    local-zone: "local." static
+    local-zone: "localhost." static
+    local-zone: "home." static
+    local-zone: "lan." static
+    local-zone: "internal." static
+    local-zone: "corp." static
+    local-zone: "private." static
+    local-zone: "test." static
+    local-zone: "invalid." static
+    
+    # Bogus private reverse lookups (bogus-priv equivalent)
+    local-zone: "10.in-addr.arpa." static
+    local-zone: "16.172.in-addr.arpa." static
+    local-zone: "17.172.in-addr.arpa." static
+    local-zone: "18.172.in-addr.arpa." static
+    local-zone: "19.172.in-addr.arpa." static
+    local-zone: "20.172.in-addr.arpa." static
+    local-zone: "21.172.in-addr.arpa." static
+    local-zone: "22.172.in-addr.arpa." static
+    local-zone: "23.172.in-addr.arpa." static
+    local-zone: "24.172.in-addr.arpa." static
+    local-zone: "25.172.in-addr.arpa." static
+    local-zone: "26.172.in-addr.arpa." static
+    local-zone: "27.172.in-addr.arpa." static
+    local-zone: "28.172.in-addr.arpa." static
+    local-zone: "29.172.in-addr.arpa." static
+    local-zone: "30.172.in-addr.arpa." static
+    local-zone: "31.172.in-addr.arpa." static
+    local-zone: "168.192.in-addr.arpa." static
+    
+    # Logging (optional - disable in production)
+    verbosity: 1
+    use-syslog: yes
 
-# listener
-listen-address=::1,127.0.0.1
-bind-interfaces
-port=53
-local-service
-
-# cache
-cache-size=10000
-neg-ttl=300
-min-cache-ttl=2400 # override low ttls
-max-cache-ttl=86400
-
-# dnssec
-proxy-dnssec
-dnssec*
-dnssec-check-unsigned
-
-# security hardening
-stop-dns-rebind
-rebind-localhost-ok
-domain-needed
-bogus-priv
-min-port=1024
-edns-packet-max=1232
-
-# privacy
-strip-mac
-strip-subnet
-
-# local tld blocking
-local=/local/
-local=/localhost/
-local=/home/
-local=/lan/
-local=/internal/
-local=/corp/
-local=/private/
-local=/test/
-local=/invalid/
+# Forward all queries to DNSCrypt (replaces dnsmasq server= directives)
+forward-zone:
+    name: "."
+    forward-addr: 127.0.0.1@54
+    forward-addr: ::1@54
+    forward-first: no
 ```
- 4. Reload Dnsmasq
+ 3. Initialize root trust anchor for DNSSEC.
 ```zsh
-sudo port unload dnsmasq
-sudo port load dnsmasq
-
-sudo lsof +c 15 -Pni UDP:53
-# dnsmasq 76961 nobody    4u  IPv4 0x60d95e4a7e822dff      0t0  UDP 127.0.0.1:53
-# dnsmasq 76961 nobody    6u  IPv6 0xaff5c953c5375455      0t0  UDP [::1]:53
+sudo unbound-anchor -a /opt/local/etc/unbound/root.key
 ```
- 5. Flush previously remaining cache and check connection speed.
+ 4. Check configurations:
+```zsh
+sudo unbound-checkconf /opt/local/etc/unbound/unbound.conf
+sudo port load unbound
+sudo lsof +c 15 -Pni UDP:53
+# Should show unbound on 127.0.0.1:53 and [::1]:53
+```
+ 5. Test Unbound dnssec
 ```zsh
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
 
-networksetup -getdnsservers "Wi-Fi"
-# 127.0.0.1
-
-scutil --dns | head -10
-# nameserver[1] : 127.0.0.1
-
-# First query (goes through the chain)
-dig @127.0.0.1 archlinux.org
-
-# Second query (should be faster - cached by dnsmasq)
-dig @127.0.0.1 archlinux.org
-```
- 6. Verify DNS configuration.
-```zsh
-scutil --dns | head -10
-
-resolver #1
-  nameserver[0] : 127.0.0.1
-  flags    : Request A records, Request AAAA records
-  reach    : 0x00030002 (Reachable,Local Address,Directly Reachable Address)
-```
- 7. Test if DNSSEC is working:
-```zsh
-# This should resolve (DNSSEC-signed domain)
+# First query - should have 'ad' flag
 dig @127.0.0.1 dnssec.works
 
-# This should FAIL (intentionally broken DNSSEC)
+# Second query (cached) - should STILL have 'ad' flag
+dig @127.0.0.1 dnssec.works
+
+# Third query - 'ad' flag should persist
+dig @127.0.0.1 dnssec.works
+
+# Test DNSSEC validation - this should FAIL
 dig @127.0.0.1 fail01.dnssec.works
 ```
- 8. Check if anonymous relays are working
 ```zsh
-sudo lsof +c 15 -Pni UDP:54
-# dnscrypt-proxy 34325 root    7u  IPv4 0x3465ee788585df1c      0t0  UDP 127.0.0.1:54
-# dnscrypt-proxy 34325 root    9u  IPv6 0xd33867f6c28e6072      0t0  UDP [::1]:54
+unbound-host -vDr test.dnscheck.tools
+test.dnscheck.tools has address xx.xx.xx.xx (secure)
+test.dnscheck.tools has IPv6 address xx:xx:xx:xx:xx:xx (secure)
+test.dnscheck.tools mail is handled by 0 . (secure)
 
-log show --predicate 'process == "dnscrypt-proxy"' --last 5m
-# Filtering the log data using "process == "dnscrypt-proxy""
-
-sudo port unload dnscrypt-proxy
-sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
-# Anonymized DNS: routing everything via [anon-cs-de anon-cs-nl anon-cs-fr anon-cs-austria anon-cs-barcelona anon-scaleway-ams anon-kama anon-dnscrypt.uk-ipv4 anon-v.dnscrypt.uk-ipv4 anon-ibksturm anon-meganerd anon-inconnu]
-# [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-brisbane-ipv4] via [anon-cs-nl]
-# [2026-01-03 21:41:30] [NOTICE] Anonymizing queries for [dnscry.pt-luxembourg-ipv4] via [anon-cs-fr]
-...
-```
-### Persisting resolv.conf
-> macOS may overwrite `/etc/resolv.conf` on network changes. Lock it with the immutable flag:
-
-```zsh
-# Set correct content
-sudo tee /etc/resolv.conf << 'EOF'
-nameserver 127.0.0.1
-nameserver ::1
-EOF
-
-# Make immutable
-sudo chflags schg /etc/resolv.conf
-
-# Verify
-ls -lO /etc/resolv.conf
-# should show "schg" flag
-```
-
-```zsh
-# To edit later
-sudo chflags noschg /etc/resolv.conf
-...
-sudo chflags schg /etc/resolv.conf
+unbound-host -vDr badsig.test.dnscheck.tools
+# ... (BOGUS (security failure))
 ```
 
 **Note** Debugging commands:
