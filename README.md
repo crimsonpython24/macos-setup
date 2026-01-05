@@ -160,10 +160,8 @@ sudo fdesetup status
 > **Multi-User Note:** This setup configures ClamAV to protect both the `admin` and `warren` (unprivileged) accounts. System daemons run as `root`, while on-access scanning runs per-user. See the table at the end of Section 2 for more permission details.
 
 ### Part 1: Base ClamAV Installation
-
 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. Do **NOT** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
-
-2. Create directories with root ownership (system daemons run as root):
+2. Create directories with `root` ownership (system daemons run as root):
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R root:wheel /opt/local/share/clamav
@@ -177,7 +175,6 @@ sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R root:wheel /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
-
 3. Set up Freshclam:
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
@@ -190,13 +187,13 @@ sudo vi /opt/local/etc/freshclam.conf
 UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 DatabaseDirectory /opt/local/share/clamav
+DatabaseOwner root
 ```
 ```zsh
 sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
 ```
-
 4. Set up `clamd`:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
@@ -211,7 +208,6 @@ PidFile /opt/local/var/run/clamav/clamd.pid
 Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
-DatabaseOwner root
 LogVerbose yes
 LogRotate yes
 LogFileMaxSize 10M
@@ -244,22 +240,15 @@ ExcludePath ^/Users/.*/Library/Preferences/com\.apple\.MobileSMS\.plist$
 ExcludePath ^/Users/.*/quarantine/
 ExcludePath ^/var/root/quarantine/
 ```
-
-5. Run `freshclam` to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8. This command requires sudo because it runs across users as `root`.
+5. Run freshclam to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified`, that is expected since clamd is not running yet.
 ```zsh
 sudo freshclam
 ```
-
-6. Wrap `clamd` inside an application to give it FDA access (macOS Tahoe 26+, remember to give FDA in Settings after this step):
+6. Create FDA app bundles for ClamAV binaries. On macOS Tahoe 26+, Full Disk Access is granted to specific binaries, not wrapper scripts. Now create app bundles containing copies of the actual binaries:
 ```zsh
+# Create ClamAVDaemon.app with actual clamd binary
 sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
-
-sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
-#!/bin/bash
-exec /opt/local/sbin/clamd "$@"
-EOF
-
-sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+sudo cp /opt/local/sbin/clamd /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
 
 sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -278,16 +267,10 @@ sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-7. Also wrap clamdscan inside an app for FDA:
+7. Create ClamDScan.app with actual clamdscan binary:
 ```zsh
 sudo mkdir -p /Applications/ClamDScan.app/Contents/MacOS
-
-sudo tee /Applications/ClamDScan.app/Contents/MacOS/ClamDScan << 'EOF'
-#!/bin/bash
-exec /opt/local/bin/clamdscan "$@"
-EOF
-
-sudo chmod +x /Applications/ClamDScan.app/Contents/MacOS/ClamDScan
+sudo cp /opt/local/bin/clamdscan /Applications/ClamDScan.app/Contents/MacOS/ClamDScan
 
 sudo tee /Applications/ClamDScan.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -306,16 +289,10 @@ sudo tee /Applications/ClamDScan.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-8. In addition, create a wrapper for freshclam:
+8. Create FreshClam.app with actual freshclam binary:
 ```zsh
 sudo mkdir -p /Applications/FreshClam.app/Contents/MacOS
-
-sudo tee /Applications/FreshClam.app/Contents/MacOS/FreshClam << 'EOF'
-#!/bin/bash
-exec /opt/local/bin/freshclam "$@"
-EOF
-
-sudo chmod +x /Applications/FreshClam.app/Contents/MacOS/FreshClam
+sudo cp /opt/local/bin/freshclam /Applications/FreshClam.app/Contents/MacOS/FreshClam
 
 sudo tee /Applications/FreshClam.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -334,7 +311,7 @@ sudo tee /Applications/FreshClam.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-9. Go into Settings and add `ClamAVDaemon.app`, `ClamDScan.app`, and `FreshClam.app` to FDA
+9. Go to **System Settings → Privacy & Security → Full Disk Access** and add `ClamAVDaemon.app`, `ClamDScan.app`, and `FreshClam.app`. Ensure the toggles are on.
 10. Create clamd daemon (runs as root for system-wide protection):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
@@ -368,7 +345,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
-10. Create freshclam daemon (for automatic database updates and runs as root):
+11. Create freshclam daemon (for automatic database updates, runs as root):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -401,28 +378,7 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
-10. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
-sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
-sudo rm -f /opt/local/var/run/clamav/freshclam.pid
-
-# This should be empty
-lsof | grep freshclam.log
-
-sudo rm /opt/local/var/log/clamav/freshclam.log
-sudo touch /opt/local/var/log/clamav/freshclam.log
-sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
-sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
-sudo rm -f /opt/local/share/clamav/daily.cvd
-
-sudo freshclam
-# Clamd successfully notified about the update.
-
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
-```
-
-11. **Checkpoint** - Verify base installation:
+12. **Checkpoint** - Verify base installation:
 ```zsh
 # Check daemons are running
 sudo launchctl list | grep com.personal
@@ -431,11 +387,11 @@ sudo launchctl list | grep com.personal
 
 # Check socket exists with correct permissions (should be srw-rw-rw-)
 ls -la /opt/local/var/run/clamav/clamd.socket
-# srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
+# srw-rw-rw-  1 root  wheel  0 Jan  6 00:45 /opt/local/var/run/clamav/clamd.socket
 
 # Check ClamAV version and database (works as any user due to socket permissions)
 clamdscan --version
-# ClamAV 1.5.1/27863/Sun Dec 28 15:26:03 2025
+# ClamAV 1.5.1/27563/Mon Jan  6 03:26:03 2026
 
 # Test scan with EICAR
 cd ~/Downloads
@@ -445,12 +401,30 @@ clamdscan -i eicar-test.txt
 rm -f eicar-test.txt
 ```
 
-**Note:** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
+**Note:** EICAR is a dummy file that only contains a signature that triggers antivirus detection. It does not contain anything malicious.
 
 **Note:** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
 
-### Part 1-1: Ensuring Warren Gets Permissions
+### Part 1-1: After MacPorts Updates ClamAV
+When MacPorts updates ClamAV (`sudo port upgrade outdated`), refresh the app bundles:
+```zsh
+# Stop daemons
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 
+# Re-copy binaries
+sudo cp /opt/local/sbin/clamd /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+sudo cp /opt/local/bin/clamdscan /Applications/ClamDScan.app/Contents/MacOS/ClamDScan
+sudo cp /opt/local/bin/freshclam /Applications/FreshClam.app/Contents/MacOS/FreshClam
+
+# Toggle FDA off then on for each app in System Settings
+
+# Restart daemons
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
+sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
+```
+
+### Part 1-2: Ensuring Warren Gets Permissions
 1. Add MacPorts to warren's PATH (both `.zshrc` and `.zprofile` for interactive and login shells):
 ```zsh
 su - warren
@@ -462,20 +436,12 @@ source ~/.zshrc
 clamdscan --version
 exit
 ```
-
 2. Test that PATH persists in login shells:
 ```zsh
 su - warren -c "clamdscan --version"
 # ClamAV 1.5.1/27871/...
 ```
-
-3. Making sure this is in admin's profile, verify FDA is enabled for ClamAVDaemon.app (**Settings > Privacy & Security > Full Disk Access**). If scanning shows "Operation not permitted" errors, ensure ClamAVDaemon.app is added and enabled, then restart clamd:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-```
-
-4. Test scanning as warren:
+3. Test scanning as warren:
 ```zsh
 su - warren
 cd ~/Downloads
