@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Configuration
-LOG_DIR="$HOME/clamav-logs"
-QUARANTINE_DIR="$HOME/quarantine"
+LOG_DIR="/var/root/clamav-logs"
+QUARANTINE_DIR="/var/root/quarantine"
 EMAIL="yjwarrenwang@gmail.com"  # Change this to your email
 SCAN_TYPE="Daily Scan"
 
@@ -52,6 +52,10 @@ for TARGET in "${TARGETS[@]}"; do
     --move="$QUARANTINE_DIR" \
     --exclude="\.viminfo$" \
     --exclude="\.bnnsir$" \
+    --exclude="\.com\.apple\.containermanagerd\.metadata\.plist$" \
+    --exclude="com\.apple\.AddressBook\.plist$" \
+    --exclude="com\.apple\.homed.*\.plist$" \
+    --exclude="com\.apple\.MobileSMS\.plist$" \
     --exclude-dir="\.git" \
     --exclude-dir="node_modules" \
     --exclude-dir="Library/Caches" \
@@ -71,7 +75,7 @@ done
 echo "" | tee -a "$SCAN_LOG"
 
 # Parse infected count - strip whitespace and validate
-INFECTED_COUNT=$(grep -i "Infected files:" "$SCAN_RESULT_FILE" 2>/dev/null | tail -1 | awk '{print $3}' | tr -d '[:space:]' || echo "")
+INFECTED_COUNT=$(grep -i "Infected files:" "$SCAN_RESULT_FILE" 2>/dev/null | awk '{sum += $3} END {print sum}' || echo "0")
 INFECTED_COUNT="${INFECTED_COUNT:-0}"
 if ! [[ "$INFECTED_COUNT" =~ ^[0-9]+$ ]]; then
   INFECTED_COUNT=0
@@ -116,14 +120,13 @@ $INFECTED_COUNT infected file(s) detected and moved to quarantine!
 
 Location: $QUARANTINE_DIR
 
-Please review and delete immediately." buttons {"Open Quarantine", "OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
+To view quarantine, run in Terminal:
+sudo ls $QUARANTINE_DIR
+
+Please review and delete immediately." buttons {"OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
 end tell
 EOF
-    ) 2>/dev/null || echo "OK"
-    
-    if [[ "$BUTTON_RESULT" == *"Open Quarantine"* ]]; then
-      open "$QUARANTINE_DIR"
-    fi
+    ) 2>/dev/null || true
   ) &
   
   disown
