@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration
 LOG_DIR="/var/root/clamav-logs"
 QUARANTINE_DIR="/var/root/quarantine"
-EMAIL="yjwarrenwang@gmail.com"  # Change this to your email
+EMAIL="yjwarrenwang@gmail.com"
 SCAN_TYPE="Daily Scan"
 
 # Create directories
@@ -69,12 +69,14 @@ for TARGET in "${TARGETS[@]}"; do
     --exclude-dir="Library/Group Containers" \
     --exclude-dir="Library/Daemon Containers" \
     --exclude-dir="Library/Biome" \
+    --exclude-dir="quarantine" \
+    --exclude-dir="/var/root/quarantine" \
     "$TARGET" 2>&1 | tee -a "$SCAN_LOG" | tee -a "$SCAN_RESULT_FILE" || true
 done
 
 echo "" | tee -a "$SCAN_LOG"
 
-# Parse infected count - strip whitespace and validate
+# Parse infected count - sum all infected counts from all targets
 INFECTED_COUNT=$(grep -i "Infected files:" "$SCAN_RESULT_FILE" 2>/dev/null | awk '{sum += $3} END {print sum}' || echo "0")
 INFECTED_COUNT="${INFECTED_COUNT:-0}"
 if ! [[ "$INFECTED_COUNT" =~ ^[0-9]+$ ]]; then
@@ -94,6 +96,10 @@ if [[ "$INFECTED_COUNT" -gt 0 ]]; then
     echo ""
     echo "Infected files have been moved to: $QUARANTINE_DIR"
     echo ""
+    echo "To view and clean up quarantine, run:"
+    echo "  sudo ls $QUARANTINE_DIR"
+    echo "  sudo rm -rf $QUARANTINE_DIR/*"
+    echo ""
     echo "--- Full Scan Results ---"
     cat "$SCAN_RESULT_FILE"
   } | mail -s "URGENT: ClamAV ${SCAN_TYPE} - $INFECTED_COUNT Infected File(s) Found!" "$EMAIL" 2>/dev/null || true
@@ -111,10 +117,13 @@ tell application "System Events"
 
 $INFECTED_COUNT infected file(s) detected and moved to quarantine!
 
-Location: $QUARANTINE_DIR
+Quarantine location: $QUARANTINE_DIR
 
-To view quarantine, run in Terminal:
-sudo ls $QUARANTINE_DIR
+To view quarantine:
+  sudo ls $QUARANTINE_DIR
+
+To clean up quarantine:
+  sudo rm -rf $QUARANTINE_DIR/*
 
 Please review and delete immediately." buttons {"OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
 end tell
