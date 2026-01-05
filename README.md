@@ -203,24 +203,27 @@ Foreground yes
 LogFile /opt/local/var/log/clamav/clamd.log
 DatabaseDirectory /opt/local/share/clamav
 LogVerbose yes
+LogRotate yes
 LogFileMaxSize 10M
 
 # Add to end (exclusions for performance)
-ExcludePath ^/.*/\.git/
-ExcludePath ^/.*/node_modules/
-ExcludePath ^/.*/Library/Caches
-ExcludePath ^/.*\.Trash
-ExcludePath ^/.*/Library/Application Support/Knowledge
-ExcludePath ^/.*/Library/Application Support/com.apple.TCC
-ExcludePath ^/.*/Library/Application Support/AddressBook
-ExcludePath ^/.*/Library/Application Support/FaceTime
-ExcludePath ^/.*/Library/Application Support/CallHistoryDB
-ExcludePath ^/.*/Library/Autosave Information
-ExcludePath ^/.*\.viminfo$
-ExcludePath ^/.*\.bnnsir$
-ExcludePath ^/.*/Library/Group Containers
-ExcludePath ^/.*/Library/Daemon Containers
-ExcludePath ^/.*/Library/Biome
+ExcludePath ^/Users/.*/\.git/
+ExcludePath ^/Users/.*/node_modules/
+ExcludePath ^/Users/.*/Library/Caches/
+ExcludePath ^/Users/.*/\.Trash/
+ExcludePath ^/Users/.*/Library/Application Support/Knowledge/
+ExcludePath ^/Users/.*/Library/Application Support/com\.apple\.TCC/
+ExcludePath ^/Users/.*/Library/Application Support/AddressBook/
+ExcludePath ^/Users/.*/Library/Application Support/FaceTime/
+ExcludePath ^/Users/.*/Library/Application Support/CallHistoryDB/
+ExcludePath ^/Users/.*/Library/Autosave Information/
+ExcludePath ^/Users/.*/\.viminfo$
+ExcludePath ^/Users/.*/\.bnnsir$
+ExcludePath ^/Users/.*/Library/Group Containers/
+ExcludePath ^/Users/.*/Library/Daemon Containers/
+ExcludePath ^/Users/.*/Library/Biome/
+ExcludePath ^/private/var/folders/
+ExcludePath ^/System/
 ```
  5. Run `freshclam` *without sudo* to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8.
 ```zsh
@@ -239,7 +242,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
     <string>com.personal.clamd</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/local/sbin/clamd</string>
+        <string>/Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon</string>
     </array>
     <key>UserName</key>
     <string>admin</string>
@@ -259,7 +262,36 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
- 7. Create freshclam daemon (for automatic database updates):
+ 7. Wrap `clamd` inside an application to give it FDA access (MacOS Tahoe 26+, remember to give FDA in Settings after this step):
+```zsh
+sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
+
+sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
+#!/bin/bash
+exec /opt/local/sbin/clamd "$@"
+EOF
+
+sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+```
+```zsh
+sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>ClamAVDaemon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.clamav-daemon</string>
+    <key>CFBundleName</key>
+    <string>ClamAVDaemon</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+```
+ 8. Create freshclam daemon (for automatic database updates):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -292,7 +324,7 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 8. If step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
+ 9. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 rm -f /opt/local/var/log/clamav/freshclam.log.lock
@@ -312,12 +344,12 @@ freshclam
 
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 9. **Checkpoint** - Verify base installation:
+ 10. **Checkpoint** - Verify base installation:
 ```zsh
 # Check daemons are running
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
-# 1340	0	com.personal.freshclam
+# -	0	com.personal.freshclam
 
 # Check socket exists
 ls -la /opt/local/var/run/clamav/clamd.socket
@@ -331,11 +363,11 @@ clamdscan --version
 cd ~/Downloads
 curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
 clamdscan -i eicar-test.txt
-# Expected: eicar-test.txt: Eicar-Test-Signature FOUND
+# eicar-test.txt: Eicar-Test-Signature FOUND
 rm -f eicar-test.txt
 ```
 
-**Note** EICAR is a dummy "virus" file that contains a signature that should notify antivirus software. It does not contain anything malicious.
+**Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
 
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
 
@@ -348,7 +380,7 @@ sudo vi /usr/local/bin/clamav-scan.sh
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
- 2. Create a permission wrapper (because giving `/bin/bash` FDA is insecure), and once again replace `admin` with the actual username:
+ 2. Create a permission wrapper that scans both users (because giving `/bin/bash` FDA is insecure):
 ```zsh
 sudo vi /usr/local/bin/clamav-wrapper.c
 ```
@@ -367,7 +399,7 @@ int main(int argc, char *argv[]) {
 sudo gcc -o /usr/local/bin/clamav-wrapper /usr/local/bin/clamav-wrapper.c
 sudo chmod +x /usr/local/bin/clamav-wrapper
 ```
- 3. Give wrapper permissions to run full-disk scans in the future (secure because this script is only manually triggered):
+ 3. Give wrapper permissions to run full-disk scans (secure because this app is only manually triggered by admin, and FDA will not accpet unsigned binaries):
 ```zsh
 sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
 
@@ -377,7 +409,8 @@ sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
 EOF
 
 sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
-
+```
+```zsh
 sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -395,7 +428,7 @@ sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
- 4. Add `/Applications/ClamAVScan.app` to FDA
+ 4. Add `/Applications/ClamAVScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
  5. Create LaunchDaemon for daily scans (runs at 4am):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
@@ -437,18 +470,17 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 # Re-verify daemons from Part 1
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
-# 1515	0	com.personal.freshclam
+# -	0	com.personal.freshclam
 # -	0	com.personal.clamscan -- there is no PID because it only runs periodically
 
 # Test daily scan manually
 curl -L -o ~/Downloads/eicar-daily-test.txt https://secure.eicar.org/eicar.com.txt
 /usr/local/bin/clamav-scan.sh ~/Downloads
 # Expected: 
-#   - Scan output with statistics
-#   - "1 infected file(s) found" message
-#   - File moved to ~/quarantine/
-#   - Dialog notification appears
-#   - Email NOT sent yet (email setup is next)
+#  - "1 infected file(s) found" message
+#  - file moved to ~/quarantine/
+#  - dialog notification appears
+#  - email NOT sent yet (email setup is next)
 
 # Check log was created
 tail -20 ~/clamav-logs/scan-$(date +%F).log
@@ -457,30 +489,30 @@ tail -20 ~/clamav-logs/scan-$(date +%F).log
 # Engine version: 1.5.1
 # Scanned directories: 1
 # Scanned files: 2
-# Infected files: 1
+# ...
 
 # Check quarantine
 ls ~/quarantine/
 # eicar-daily-test.txt
 ```
 
-### Part 3: Email Notifications (Optional)
+### Part 3: Email Notifications
 > Skip this section if you don't want email alerts. The scan scripts will work fine without email - alerts simply won't be sent.
 
- 1. Create SASL password file:
+ 1. To generate a Gmail App Password:
+   - Go to https://myaccount.google.com/security
+   - Enable 2-Step Verification if not already enabled
+   - Search for "App passwords"
+   - Generate a new app password for "Mail"
+   - Use that 16-character password in the file above
+ 2. Create SASL password file:
 ```zsh
 sudo vi /etc/postfix/sasl_passwd
 
 # Add (replace with your email and app password):
 [smtp.gmail.com]:587 yjwarrenwang@gmail.com:YOUR_APP_PASSWORD_HERE
 ```
- 2. To generate a Gmail App Password:
-   - Go to https://myaccount.google.com/security
-   - Enable 2-Step Verification if not already enabled
-   - Search for "App passwords"
-   - Generate a new app password for "Mail"
-   - Use that 16-character password in the file above
- 3. Configure postfix:
+ 3. Configure postfix and click "Allow" for prompted notification:
 ```zsh
 sudo vi /etc/postfix/main.cf
 
@@ -507,33 +539,34 @@ sudo postfix reload
 ```
  6. **Checkpoint** - Verify email AND re-verify Parts 1-2:
 ```zsh
-# Test email directly
+# test email directly
 echo "Test email from ClamAV setup" | mail -s "ClamAV Test" yjwarrenwang@gmail.com
 sleep 5
 mailq
 # Mail queue is empty
-# Check inbox for the test email, might need a minute
+# check inbox for the test email, might need a minute
 
 # Re-verify all daemons
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
-# 1730	0	com.personal.freshclam
+# -	0	com.personal.freshclam
 # -	0	com.personal.clamscan
 
 # Full integration test with email
 curl -L -o ~/Downloads/eicar-email-test.txt https://secure.eicar.org/eicar.com.txt
 /usr/local/bin/clamav-scan.sh ~/Downloads
 # Expected:
-#   - Scan completes
-#   - Dialog notification appears
-#   - Email IS sent this time (check inbox)
-#   - Log shows "Email sent successfully"
+#   - scan completes
+#   - dialog notification appears
+#   - email IS sent this time (check inbox)
+#   - log shows "Email sent successfully"
 
 tail -10 ~/clamav-logs/scan-$(date +%F).log
 # "Email sent successfully" somewhere
+rm -rf ~/quarantine/*
 ```
 
-### Part 4: On-Access Scanning (Optional)
+### Part 4: On-Access Scanning
 > There is no official on-access scanning on macOS (only Linux via `fanotify`). This uses `fswatch` as a workaround for real-time file monitoring.
 
  1. Install `fswatch`:
@@ -543,6 +576,7 @@ sudo port install fswatch
  2. Create the on-access scan script (also in [this repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-onaccess.sh)):
 ```zsh
 sudo vi /usr/local/bin/clamav-onaccess.sh
+# ...
 ```
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-onaccess.sh
@@ -580,7 +614,7 @@ launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 ```
  5. **Checkpoint** - Full system verification (verifies everything):
 ```zsh
-# === Verify all daemons ===
+# Verify all daemons
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
 # -	0	com.personal.freshclam
@@ -590,13 +624,13 @@ launchctl list | grep clamav-onaccess
 # 1825	0	com.personal.clamav-onaccess
 
 ps aux | grep fswatch | grep -v grep
-# /opt/local/bin/fswatch should be somewhere
+# /opt/local/bin/fswatch -0 -r -l 2...
 
-# === Verify clamd socket ===
+# Verify clamd socket
 ls -la /opt/local/var/run/clamav/clamd.socket
 # srw-rw-rw-  1 admin  staff  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
 
-# === Test on-access scanning ===
+# Test on-access scanning
 # Terminal 1:
 tail -f ~/clamav-logs/onaccess-$(date +%F).log
 
@@ -608,27 +642,25 @@ curl -L -o eicar-onaccess-test.txt https://secure.eicar.org/eicar.com.txt
 #   - "INFECTED: ..."
 #   - "Alerts spawned"
 # Expected on screen:
-#   - Notification appears
-#   - Dialog appears with "ClamAV On-Access Alert"
-#   - Email received (if configured)
+#   - notification appears
+#   - dialog "ClamAV On-Access Alert"
+#   - email received
 
-# === Test clean file (should not alert) ===
+# Test small file (should not alert, <50B unlikely to be virus)
 echo "normal content" > ~/Downloads/clean-test.txt
 # Expected in log: "Clean"
 
-# === Verify email (if configured) ===
-mailq
-# Expected: "Mail queue is empty" (emails sent)
+# Test clean file (should not alert)
+echo "longer content that should be larger than 50 bytes" > ~/Downloads/clean-test2.txt
+# Expected in log: "Clean"
 
-# === Check all logs exist ===
+# Verify email
+mailq
+# "Mail queue is empty"
+
+# Check all logs exist
 ls -la ~/clamav-logs/
 # Expected: scan-YYYY-MM-DD.log and onaccess-YYYY-MM-DD.log
-```
- 6. Test with clean file:
-```zsh
-echo "This is a normal file" > ~/Downloads/clean-file-test.txt
-tail -5 ~/clamav-logs/onaccess-$(date +%F).log
-# Expected: Shows "Clean" for clean-file-test.txt
 ```
 
 ### Cleanup: Remove Default MacPorts Services
@@ -687,12 +719,17 @@ sudo launchctl start com.personal.clamscan
     - "Login Items & Extensions" > "App Background Activity" add Santa.app
     - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" add Santa daemon
     - "Login Items & Extensions" > "Extensions" > "By App" > should show "Santa" after restarting Settings
-    - "Privacy" > "Full Disk Access" enable Santa Security Extensions (will not show up until after restart)
+    - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
  3. Check if Santa is running:
 ```zsh
 sudo santactl doctor
 ```
  4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). If the NIST configuration profile blocks installation, remove that profile first, install this Santa profile, and then add the original MDM back.
+```zsh
+vi santa.mobileconfig
+# ...
+sudo open santa.mobileconfig
+```
  5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
 ```zsh
 santactl fileinfo /System/Applications/Dictionary.app 
