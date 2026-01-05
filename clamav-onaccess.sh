@@ -85,6 +85,7 @@ EXCLUDE_PATTERNS=(
     "lock$"
     "\.lock$"
     "LOCK$"
+    "quarantine"
 )
 
 # Build fswatch exclude arguments
