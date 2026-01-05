@@ -98,20 +98,13 @@ if [[ "$INFECTED_COUNT" -gt 0 ]]; then
     cat "$SCAN_RESULT_FILE"
   } | mail -s "URGENT: ClamAV ${SCAN_TYPE} - $INFECTED_COUNT Infected File(s) Found!" "$EMAIL" 2>/dev/null || true
   
-  # Brief wait for email queue (non-blocking after 30s)
-  for i in {1..30}; do
-    if mailq 2>/dev/null | grep -q "Mail queue is empty"; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Email sent successfully" | tee -a "$SCAN_LOG"
-      break
-    fi
-    sleep 1
-  done
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Email queued" | tee -a "$SCAN_LOG"
   
   # Show notifications in background (non-blocking)
   (
     osascript -e 'tell application "System Events" to display notification "'"$INFECTED_COUNT"' infected file(s) found and quarantined!" with title "ClamAV '"${SCAN_TYPE}"' Alert" sound name "Basso"' 2>/dev/null || true
     
-    BUTTON_RESULT=$(osascript <<EOF
+    osascript <<EOF
 tell application "System Events"
   activate
   display dialog "ClamAV ${SCAN_TYPE} Alert
@@ -126,8 +119,7 @@ sudo ls $QUARANTINE_DIR
 Please review and delete immediately." buttons {"OK"} default button 1 with title "ClamAV ${SCAN_TYPE} Alert" with icon caution giving up after 300
 end tell
 EOF
-    ) 2>/dev/null || true
-  ) &
+  ) 2>/dev/null &
   
   disown
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alerts sent" | tee -a "$SCAN_LOG"
