@@ -463,19 +463,11 @@ sudo vi /usr/local/bin/clamav-scan.sh
 sudo chmod 755 /usr/local/bin/clamav-scan.sh
 ```
 
-2. Create a permission wrapper that scans both users (because giving `/bin/bash` FDA is insecure). This wrapper scans both admin and warren directories:
+2. Create the scan app with FDA. On macOS Tahoe, we copy `/bin/bash` into the app bundle so that bash itself has FDA when running the script:
 ```zsh
 sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
+sudo cp /bin/bash /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
 
-sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
-#!/bin/bash
-# Multi-user daily scan - scans both admin and warren
-/usr/local/bin/clamav-scan.sh /Users/admin /Users/warren
-EOF
-
-sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
-```
-```zsh
 sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -496,7 +488,7 @@ EOF
 
 3. Add `/Applications/ClamAVScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
 
-4. Create LaunchDaemon for daily scans (runs at 4am as root, scans all users):
+4. Create LaunchDaemon for daily scans. Note: the script path and arguments are passed to the bash binary:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -510,6 +502,9 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan</string>
+        <string>/usr/local/bin/clamav-scan.sh</string>
+        <string>/Users/admin</string>
+        <string>/Users/warren</string>
     </array>
     <key>UserName</key>
     <string>root</string>
@@ -675,18 +670,11 @@ sudo vi /usr/local/bin/clamav-onaccess.sh
 sudo chmod 755 /usr/local/bin/clamav-onaccess.sh
 ```
 
-3. Create the on-access wrapper app with FDA (shared by all users):
+3. Create the on-access wrapper app with FDA. Like Part 2, we copy `/bin/bash` into the app bundle:
 ```zsh
 sudo mkdir -p /Applications/ClamAVOnAccess.app/Contents/MacOS
+sudo cp /bin/bash /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess
 
-sudo tee /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess << 'EOF'
-#!/bin/bash
-exec /usr/local/bin/clamav-onaccess.sh "$@"
-EOF
-
-sudo chmod +x /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess
-```
-```zsh
 sudo tee /Applications/ClamAVOnAccess.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -707,7 +695,7 @@ EOF
 
 4. Add `/Applications/ClamAVOnAccess.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
 
-5. Create LaunchAgent for admin user (runs as admin, monitors admin's directories):
+5. Create LaunchAgent for admin user (runs as admin, monitors admin's directories). Note: the script path is passed as an argument to the bash binary:
 ```zsh
 # Run as admin user (not sudo)
 mkdir -p ~/Library/LaunchAgents
@@ -723,6 +711,7 @@ vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess</string>
+        <string>/usr/local/bin/clamav-onaccess.sh</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -762,6 +751,7 @@ cat > ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist << 'EOF'
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess</string>
+        <string>/usr/local/bin/clamav-onaccess.sh</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -847,6 +837,28 @@ ls -la /Users/warren/clamav-logs/
 ```zsh
 ps aux | grep fswatch | grep -v grep
 sudo kill -9 <PID>
+```
+
+### After macOS or MacPorts Updates
+
+When macOS updates `/bin/bash` or after major OS upgrades, refresh the app bundles:
+
+```zsh
+# Stop services
+sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
+launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+su - warren -c "launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist"
+
+# Re-copy bash binary
+sudo cp /bin/bash /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
+sudo cp /bin/bash /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess
+
+# Toggle FDA off then on for ClamAVScan.app and ClamAVOnAccess.app in System Settings
+
+# Restart services
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
+launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+su - warren -c "launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist"
 ```
 
 ### Cleanup: Remove Default MacPorts Services
