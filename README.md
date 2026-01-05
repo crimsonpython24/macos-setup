@@ -54,9 +54,9 @@ This section reflects the "secure, not private" concept in that, although these 
 
 Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
 
- > Unless otherwise specified, all commands here should be ran at the project base.
+ > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
 
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or one from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
 ```zsh
 cd build
 mkdir baselines && cd baselines
@@ -77,7 +77,7 @@ source venv/bin/activate
 python3 -m pip install --upgrade pip
 pip3 install pyyaml xlwt
 ```
- 4. Optional: Load custom ODV values
+ 4. Optional: load custom ODVs (organization-defined values)
 ```zsh
 cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
 odv:
@@ -94,7 +94,7 @@ odv:
   custom: 0
 EOF
 ```
- 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (keep running the script even if it kills itself; it will eventually get all permissions).
+ 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
 ```zsh
 python3 scripts/generate_guidance.py \
         -P \
@@ -106,7 +106,7 @@ python3 scripts/generate_guidance.py \
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 for now. The compliance percentage should be around 15%. Exit the tool.
+ 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%. Exit the tool.
  8. Install the configuration profile (one might have to open the Settings app to install the profile):
 ```zsh
 # Re-run this line if any of the YAML fields are edited (e.g., new ODVs)
@@ -120,47 +120,48 @@ python3 scripts/generate_guidance.py \
 cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
 ```
- 9. After installing the profile, one way to verify that custom values are working is to go to "Lock screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 10. If not already, exit and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+ 9. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 10. Exit (if not already) and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered within the configuration profile. There will be a handful of them.
- 12. Exit the script and run options 2 and 1 yet again. The compliance percentage should be about 95%. In this step, running option 3 will not do anything, because it does everything within its control already, and the script will automatically return to the main menu.
+ 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There will be a handful of them.
+ 12. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
  13. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security". Further ensure that pf firewall and FileVault are enabled (ALF is enabled by default):
+ 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
 
 sudo pfctl -a '*' -sr | grep "block drop in all"
-# should output smt like "block drop in all" i.e. default deny all incoming
+# Should output smt like "block drop in all" i.e. default deny all incoming
 sudo pfctl -s info
+# Should be running
 ```
 ```
-# checks filevault
+# FileVault
 sudo fdesetup status
 ```
  15. Note from previous step: one might encounter these two warnings
-   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all
+   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
    - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 16. The script should yield 100% compliance. Restart the device.
+ 16. The script should yield 100% compliance by running option 2, then option 1. Restart the device.
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 2. ClamAV Setup (MacPorts) - Multi-User Configuration
 
-> **Note on Email Notifications:** The scan scripts include email alerting, but this is **optional**. If email is not configured, the scripts will still work - alerts simply won't be sent. To enable email notifications, complete the "Email Notifications Setup" section later in this guide.
+> **Note on Email Notifications:** The scan scripts include email alerting, but this is **optional**. If email is not configured, the scripts will still work, and alerts simply will not be sent. To enable email notifications, complete the "Email Notifications Setup" section later in this guide.
 
-> **Multi-User Note:** This setup configures ClamAV to protect both the `admin` and `warren` (unprivileged) accounts. System daemons run as `root`, while on-access scanning runs per-user.
+> **Multi-User Note:** This setup configures ClamAV to protect both the `admin` and `warren` (unprivileged) accounts. System daemons run as `root`, while on-access scanning runs per-user. See the table at the end of Section 2 for more permission details.
 
 ### Part 1: Base ClamAV Installation
 
-1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important:* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also do not give `daemondo` full-disk access because it is unnecessary.
+1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. Do **NOT** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
 
 2. Create directories with root ownership (system daemons run as root):
 ```zsh
@@ -180,7 +181,8 @@ sudo chmod 755 /opt/local/var/run/clamav
 3. Set up Freshclam:
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
-
+```
+```conf
 # Comment out:
 # Example
 
@@ -198,7 +200,8 @@ sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
 4. Set up `clamd`:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
-
+```
+```conf
 # Comment out:
 # Example
 
@@ -275,7 +278,6 @@ sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-
 7. Also wrap clamdscan inside an app for FDA:
 ```zsh
 sudo mkdir -p /Applications/ClamDScan.app/Contents/MacOS
@@ -304,8 +306,36 @@ sudo tee /Applications/ClamDScan.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
+8. In addition, create a wrapper for freshclam:
+```zsh
+sudo mkdir -p /Applications/FreshClam.app/Contents/MacOS
 
-8. Create clamd daemon (runs as root for system-wide protection):
+sudo tee /Applications/FreshClam.app/Contents/MacOS/FreshClam << 'EOF'
+#!/bin/bash
+exec /opt/local/bin/freshclam "$@"
+EOF
+
+sudo chmod +x /Applications/FreshClam.app/Contents/MacOS/FreshClam
+
+sudo tee /Applications/FreshClam.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>FreshClam</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.freshclam</string>
+    <key>CFBundleName</key>
+    <string>FreshClam</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+```
+9. Go into Settings and add `ClamAVDaemon.app`, `ClamDScan.app`, and `FreshClam.app` to FDA
+10. Create clamd daemon (runs as root for system-wide protection):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```
@@ -338,8 +368,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
-
-9. Create freshclam daemon (for automatic database updates, runs as root):
+10. Create freshclam daemon (for automatic database updates and runs as root):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -352,7 +381,7 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
     <string>com.personal.freshclam</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/local/bin/freshclam</string>
+        <string>/Applications/FreshClam.app/Contents/MacOS/FreshClam</string>
     </array>
     <key>UserName</key>
     <string>root</string>
@@ -372,7 +401,6 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
-
 10. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
@@ -386,8 +414,8 @@ sudo rm /opt/local/var/log/clamav/freshclam.log
 sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
-
 sudo rm -f /opt/local/share/clamav/daily.cvd
+
 sudo freshclam
 # Clamd successfully notified about the update.
 
