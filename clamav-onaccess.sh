@@ -64,7 +64,10 @@ wait_for_clamd() {
 # Watch Paths Configuration
 # ============================================================================
 WATCH_PATHS=(
-    # User directories
+    # Home directory itself (for files directly in ~)
+    "$HOME"
+    
+    # User directories (these are redundant now but kept for clarity)
     "$HOME/Downloads"
     "$HOME/Desktop"
     "$HOME/Documents"
