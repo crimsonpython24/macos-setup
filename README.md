@@ -768,7 +768,7 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 
 ### B) DNSCrypt
 > Some VPN applications override DNS settings on connect; may need to reconfigure VPN after setting up a local DNS server (change DNS to 127.0.0.1).
-> No need to configure DNSSEC in this step; it will be handled with Dnsmasq.
+> No need to configure DNSSEC in this step; it will be handled with Unbound.
 
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Because there will be no connection until section 3(C) is configured, first install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
@@ -923,7 +923,7 @@ sudo vi /opt/local/etc/unbound/unbound.conf
 # /opt/local/etc/unbound/unbound.conf
 
 server:
-    # Listener (equivalent to dnsmasq listen-address and port)
+    # listener config
     interface: 127.0.0.1
     interface: ::1
     port: 53
@@ -932,29 +932,45 @@ server:
     do-udp: yes
     do-tcp: yes
     
-    # Bind to specific interfaces only (equivalent to bind-interfaces)
+    # bind to specific interfaces only
     interface-automatic: no
+    
+    # access control
     access-control: 127.0.0.0/8 allow
     access-control: ::1 allow
     access-control: 0.0.0.0/0 refuse
     access-control: ::0/0 refuse
     
-    # Cache settings (migrated from dnsmasq cache config)
+    # cache settings
     cache-min-ttl: 2400
     cache-max-ttl: 86400
-    serve-expired-ttl: 300
-    msg-cache-size: 50m
-    rrset-cache-size: 100m
-    neg-cache-size: 10m
+    cache-max-negative-ttl: 3600
     
-    # DNSSEC validation (replaces proxy-dnssec with real validation)
+    # serve expired entries while refreshing (resilience)
+    serve-expired: yes
+    serve-expired-ttl: 86400
+    serve-expired-reply-ttl: 30
+    serve-expired-client-timeout: 1800
+    
+    # cache sizes (slightly increased from original)
+    msg-cache-size: 64m
+    rrset-cache-size: 128m
+    neg-cache-size: 16m
+    
+    # DNSSEC
     module-config: "validator iterator"
     auto-trust-anchor-file: "/opt/local/etc/unbound/root.key"
     val-clean-additional: yes
     val-permissive-mode: no
+    val-log-level: 1
     
-    # Security hardening (migrated from dnsmasq security settings)
-    # DNS rebinding protection (stop-dns-rebind equivalent)
+    # trust anchor signaling (RFC 8145)
+    trust-anchor-signaling: yes
+    
+    # root key sentinel (detects root key rollovers)
+    root-key-sentinel: yes
+    
+    # dns rebinding protection
     private-address: 10.0.0.0/8
     private-address: 172.16.0.0/12
     private-address: 192.168.0.0/16
@@ -963,51 +979,92 @@ server:
     private-address: fe80::/10
     private-address: 127.0.0.0/8
     private-address: ::1/128
+
+    # block IPv4-mapped IPv6 addresses (bypass prevention)
+    private-address: ::ffff:0:0/96
     
-    # But allow localhost queries (rebind-localhost-ok equivalent)
+    # allow localhost queries (rebind-localhost-ok equivalent)
     private-domain: "localhost."
     private-domain: "127.in-addr.arpa."
     
-    # Harden against algorithm downgrade attacks
+    # DNSSEC hardening
     harden-algo-downgrade: yes
     harden-below-nxdomain: yes
     harden-dnssec-stripped: yes
     harden-glue: yes
     harden-large-queries: yes
-    harden-referral-path: yes
+    harden-referral-path: no  # Changed: experimental, can cause performance issues
     harden-short-bufsize: yes
+    harden-unknown-additional: yes  # NEW: reject unknown record types in additional section
     
-    # Reject queries for unqualified names (domain-needed equivalent)
-    do-not-query-localhost: no
+    # 0x20-encoded random bits to foil spoof attempts
+    use-caps-for-id: yes
     
-    # EDNS buffer size (edns-packet-max equivalent)
+    # deny queries of type ANY (reduces amplification attacks)
+    deny-any: yes
+    
+    # unwanted reply threshold: defend against cache poisoning
+    # clears cache if threshold reached (10 million suggested by manpage)
+    unwanted-reply-threshold: 10000000
+    
+    # EDNS buffer size (DNS Flag Day 2020)
     edns-buffer-size: 1232
     max-udp-size: 1232
     
-    # Outbound port range (min-port equivalent)
+    # outbound port range w/ source port randomization
     outgoing-port-permit: 1024-65535
     outgoing-port-avoid: 0-1023
     
-    # Privacy features (strip-mac, strip-subnet equivalents)
+    # do not query localhost
+    do-not-query-localhost: no
+    
+    # privacy features
     qname-minimisation: yes
     qname-minimisation-strict: no
     aggressive-nsec: yes
     hide-identity: yes
     hide-version: yes
+    hide-trustanchor: yes 
+    identity: "DNS"  
+    minimal-responses: yes
     
-    # Performance tuning
+    # performance?
     num-threads: 2
+    
+    # slabs should be power of 2 close to num-threads
     msg-cache-slabs: 4
     rrset-cache-slabs: 4
     infra-cache-slabs: 4
     key-cache-slabs: 4
-    so-reuseport: yes
     
-    # Prefetch popular items before they expire
+    # socket options (increase send/recv buffer)
+    so-reuseport: yes
+    so-rcvbuf: 4m  
+    so-sndbuf: 4m  
+    
+    # prefetch popular items before they expire
     prefetch: yes
     prefetch-key: yes
     
-    # Local TLD blocking (local=/domain/ equivalents)
+    # rotate RRset order in responses (load balancing)
+    rrset-roundrobin: yes
+    
+    # number of queries per thread
+    num-queries-per-thread: 4096
+    outgoing-range: 8192
+    
+    # TCP connection handling
+    incoming-num-tcp: 100
+    outgoing-num-tcp: 100
+    
+    # extra delay for timeouted udp ports (prevents port counter issues)
+    delay-close: 10000
+    
+    # infra-cache settings
+    infra-cache-numhosts: 10000
+    infra-keep-probing: yes  # NEW: keep probing hosts that are down
+    
+    # local zones for tld blocking
     local-zone: "local." static
     local-zone: "localhost." static
     local-zone: "home." static
@@ -1018,7 +1075,11 @@ server:
     local-zone: "test." static
     local-zone: "invalid." static
     
-    # Bogus private reverse lookups (bogus-priv equivalent)
+    # additional rfc recommended zones
+    local-zone: "onion." static
+    local-zone: "home.arpa." static
+    
+    # bogus private reverse lookups (bogus-priv equivalent)
     local-zone: "10.in-addr.arpa." static
     local-zone: "16.172.in-addr.arpa." static
     local-zone: "17.172.in-addr.arpa." static
@@ -1038,16 +1099,36 @@ server:
     local-zone: "31.172.in-addr.arpa." static
     local-zone: "168.192.in-addr.arpa." static
     
-    # Logging (optional - disable in production)
+    # additional private reverse zones
+    local-zone: "254.169.in-addr.arpa." static
+    local-zone: "d.f.ip6.arpa." static
+    local-zone: "8.e.f.ip6.arpa." static
+    local-zone: "9.e.f.ip6.arpa." static
+    local-zone: "a.e.f.ip6.arpa." static
+    local-zone: "b.e.f.ip6.arpa." static
+    
+    # logging
     verbosity: 1
     use-syslog: yes
+    log-queries: no
+    log-replies: no
+    log-servfail: yes  # NEW: log why queries return SERVFAIL
+    log-local-actions: no
+    
+    # dns error codes
+    ede: yes
+    ede-serve-expired: yes
 
-# Forward all queries to DNSCrypt (replaces dnsmasq server= directives)
+# forwarding zones for dnscrypt-proxy (configured upstream)
 forward-zone:
     name: "."
     forward-addr: 127.0.0.1@54
     forward-addr: ::1@54
     forward-first: no
+
+# disable remote control
+remote-control:
+    control-enable: no
 ```
  3. Initialize root trust anchor for DNSSEC.
 ```zsh
@@ -1060,7 +1141,7 @@ sudo port load unbound
 sudo lsof +c 15 -Pni UDP:53
 # Should show unbound on 127.0.0.1:53 and [::1]:53
 ```
- 5. Test Unbound dnssec
+ 5. Test Unbound dnssec:
 ```zsh
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
@@ -1087,6 +1168,32 @@ unbound-host -vDr badsig.test.dnscheck.tools
 # ... (BOGUS (security failure))
 ```
 
+**Note** Some websites will not have `ad` flag no matter how hard one tries. E.g.,
+```zsh
+dig DNSKEY archlinux.org
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38272
+;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+
+;; QUESTION SECTION:
+;archlinux.org.			IN	DNSKEY    <--- empty!
+
+;; AUTHORITY SECTION:
+archlinux.org.		3600	IN	SOA	hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010201 86400 10800 3600000 3600
+```
+```zsh
+dig DNSKEY dnssec.works
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 65193
+;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; QUESTION SECTION:
+;dnssec.works.			IN	DNSKEY
+
+;; ANSWER SECTION:
+dnssec.works.		4965	IN	DNSKEY	257 3 8 AwEAAa+YwrBlCwfJzwmsSK87hKFAm+yz0...
+```
+
 **Note** Debugging commands:
 ```zsh
 log show --predicate 'process == "dnscrypt-proxy"' --last 5m
@@ -1100,5 +1207,5 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 
 <sup>https://wiki.archlinux.org/title/Dnscrypt-proxy#Startup</sup></br>
 <sup>https://00f.net/2019/11/03/stop-using-low-dns-ttls/</sup></br>
-<sup>https://wiki.archlinux.org/title/Dnsmasq#DNS_addresses_file_and_forwarding</sup></br>
-<sup>https://github.com/drduh/macOS-Security-and-Privacy-Guide?tab=readme-ov-file#dnsmasq</sup>
+<sup>https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html</sup>
+<sup>https://wiki.archlinux.org/title/Unbound</sup>
