@@ -247,7 +247,6 @@ sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 
-# Code sign the app (required for FDA on macOS Tahoe 26+)
 sudo codesign --force --sign - /Applications/ClamAVDaemon.app
 ```
  7. Wrap `clamdscan` (the client) inside an application to give it FDA access (required for scanning files as unprivileged user):
@@ -278,7 +277,6 @@ sudo tee /Applications/ClamdScan.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 
-# Code sign the app (required for FDA on macOS Tahoe 26+)
 sudo codesign --force --sign - /Applications/ClamdScan.app
 ```
  8. Create `clamd` LaunchDaemon:
@@ -307,17 +305,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 </dict>
 </plist>
 ```
- 9. Add the following apps to FDA (**Settings > Privacy & Security > Full Disk Access**):
-   - `/Applications/ClamAVDaemon.app`
-   - `/Applications/ClamdScan.app`
-   
-   Then load the daemon:
-```zsh
-# Let sleep for a bit for FDA permission to take effect
-sleep 5
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-```
- 10. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
+ 9. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
 ```zsh
 sudo mkdir -p /Applications/FreshclamDaemon.app/Contents/MacOS
 
@@ -345,10 +333,9 @@ sudo tee /Applications/FreshclamDaemon.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 
-# Code sign the app
 sudo codesign --force --sign - /Applications/FreshclamDaemon.app
 ```
- 11. Create Freshclam LaunchDaemon (for automatic database updates), and also give `FreshclamDaemon.app` full disk access:
+ 10. Create Freshclam LaunchDaemon (for automatic database updates):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -374,6 +361,10 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
+ 11. Add the following apps to FDA (**Settings > Privacy & Security > Full Disk Access**):
+   - `/Applications/ClamAVDaemon.app`
+   - `/Applications/ClamdScan.app`
+   - `/Applications/FreshclamDaemon.app`
  12. Run this sequence to start Clamd fresh and ensure that `freshclam` notifies `clamd` daemon:
 ```zsh
 sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
@@ -383,10 +374,11 @@ sudo rm -f /opt/local/var/run/clamav/freshclam.pid
 lsof | grep freshclam.log
 
 sudo rm /opt/local/var/log/clamav/freshclam.log
-sudo rm /opt/local/share/clamav/daily.cvd
 sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
+
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
 # Important: run as sudo
 sudo freshclam
@@ -413,6 +405,7 @@ su - warren
 # Add MacPorts to PATH (one-time setup)
 echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
 echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zprofile
+echo 'alias clamdscan="/Applications/ClamdScan.app/Contents/MacOS/ClamdScan"' >> ~/.zshrc
 source ~/.zshrc
 
 # Check ClamAV version and database (use wrapped clamdscan)
@@ -425,10 +418,6 @@ curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
 /Applications/ClamdScan.app/Contents/MacOS/ClamdScan -i eicar-test.txt
 # eicar-test.txt: Eicar-Test-Signature FOUND
 rm -f eicar-test.txt
-
-# Optional: create an alias for convenience
-echo 'alias clamdscan="/Applications/ClamdScan.app/Contents/MacOS/ClamdScan"' >> ~/.zshrc
-source ~/.zshrc
 ```
 
 **Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
@@ -436,6 +425,9 @@ source ~/.zshrc
 **Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
 
 ### Part 2: Daily Scan Setup
+
+> Run Part 2 commands as admin (`su - admin` if currently in warren).
+
  1. Create root-owned directories for logs and quarantine:
 ```zsh
 sudo mkdir -p /var/root/clamav-logs
@@ -446,7 +438,55 @@ sudo mkdir -p /var/root/quarantine
 sudo chown root:wheel /var/root/quarantine
 sudo chmod 700 /var/root/quarantine
 ```
- 2. Create the daily scan script (in this [repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-scan.sh)):
+ 2. Wrap `clamscan` inside an application to give it FDA access (required for file scanning):
+```zsh
+sudo mkdir -p /Applications/ClamScan.app/Contents/MacOS
+
+sudo tee /Applications/ClamScan.app/Contents/MacOS/ClamScan << 'EOF'
+#!/bin/bash
+exec /opt/local/bin/clamscan "$@"
+EOF
+
+sudo chmod +x /Applications/ClamScan.app/Contents/MacOS/ClamScan
+
+sudo tee /Applications/ClamScan.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>ClamScan</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.clamscan</string>
+    <key>CFBundleName</key>
+    <string>ClamScan</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+
+sudo codesign --force --sign - /Applications/ClamScan.app
+```
+ 3. Add `/Applications/ClamScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
+ 4. **Verify** `ClamScan.app` works before proceeding:
+```zsh
+# Create test file
+sudo curl -L -o /Users/warren/Downloads/eicar-test.txt https://secure.eicar.org/eicar.com.txt
+sudo chown warren:staff /Users/warren/Downloads/eicar-test.txt
+
+# Verify file content is correct
+cat /Users/warren/Downloads/eicar-test.txt
+# Should show: X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+
+# Test ClamScan.app directly
+sudo /Applications/ClamScan.app/Contents/MacOS/ClamScan /Users/warren/Downloads/eicar-test.txt
+# Expected: /Users/warren/Downloads/eicar-test.txt: Eicar-Test-Signature FOUND
+
+# If NOT found, ClamScan.app is missing FDA - re-add it and try again
+rm -f /Users/warren/Downloads/eicar-test.txt
+```
+ 5. Create the daily scan script (in this [repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-scan.sh)):
 ```zsh
 sudo mkdir -p /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
@@ -454,26 +494,7 @@ sudo vi /usr/local/bin/clamav-scan.sh
 ```zsh
 sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
- 3. Create a permission wrapper that scans warren's home directory:
-```zsh
-sudo vi /usr/local/bin/clamav-wrapper.c
-```
-```c
-#include <unistd.h>
-#include <stdio.h>
-
-int main(int argc, char *argv[]) {
-    char *args[] = {"/bin/bash", "/usr/local/bin/clamav-scan.sh", "/Users/warren", NULL};
-    execv("/bin/bash", args);
-    perror("execv failed");
-    return 1;
-}
-```
-```zsh
-sudo gcc -o /usr/local/bin/clamav-wrapper /usr/local/bin/clamav-wrapper.c
-sudo chmod +x /usr/local/bin/clamav-wrapper
-```
- 4. Give wrapper permissions to run full-disk scans (secure because this app is only manually triggered by admin, and FDA will not accept unsigned binaries):
+ 6. Create the ClamAVScan.app wrapper that calls the scan script:
 ```zsh
 sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
 
@@ -483,8 +504,7 @@ sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
 EOF
 
 sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
-```
-```zsh
+
 sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -501,9 +521,11 @@ sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 </dict>
 </plist>
 EOF
+
+# Code sign the app
+sudo codesign --force --sign - /Applications/ClamAVScan.app
 ```
- 5. Add `/Applications/ClamAVScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
- 6. Create LaunchDaemon for daily scans (runs at 4am as root):
+ 7. Create LaunchDaemon for daily scans (runs at 4am as root):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -535,7 +557,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
- 7. **Checkpoint** - Verify daily scan setup (also re-verifies Part 1):
+ 8. **Checkpoint** - Verify daily scan setup (run as admin):
 ```zsh
 # Re-verify daemons from Part 1
 sudo launchctl list | grep com.personal
@@ -543,27 +565,31 @@ sudo launchctl list | grep com.personal
 # -	0	com.personal.freshclam
 # -	0	com.personal.clamscan -- there is no PID because it only runs periodically
 
-# Test daily scan manually
-curl -L -o ~/Downloads/eicar-daily-test.txt https://secure.eicar.org/eicar.com.txt
-sudo /usr/local/bin/clamav-scan.sh /Users/warren/Downloads
+# Create test file in warren's Downloads
+sudo curl -L -o /Users/warren/Downloads/eicar-daily-test.txt https://secure.eicar.org/eicar.com.txt
+sudo chown warren:staff /Users/warren/Downloads/eicar-daily-test.txt
+
+# Test daily scan manually (scans /Users/warren by default)
+sudo /usr/local/bin/clamav-scan.sh
 # Expected: 
 #  - "1 infected file(s) found" message
 #  - file moved to /var/root/quarantine/
 #  - dialog notification appears
 #  - email NOT sent yet (email setup is next)
+# Note: Some "errors" are normal (macOS protected files that can't be scanned)
 
 # Check log was created
 sudo tail -20 /var/root/clamav-logs/scan-$(date +%F).log
 # ----------- SCAN SUMMARY -----------
-# Known viruses: 3701067
-# Engine version: 1.5.1
-# Scanned directories: 1
-# Scanned files: 2
+# Infected files: 1
 # ...
 
 # Check quarantine
 sudo ls /var/root/quarantine/
 # eicar-daily-test.txt
+
+# Clean up quarantine for next tests
+sudo rm -rf /var/root/quarantine/*
 ```
 
 ### Part 3: Email Notifications
