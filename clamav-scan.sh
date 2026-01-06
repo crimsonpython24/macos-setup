@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Configuration
+# Configuration - root-owned directories for security
 LOG_DIR="/var/root/clamav-logs"
 QUARANTINE_DIR="/var/root/quarantine"
 EMAIL="yjwarrenwang@gmail.com"
 SCAN_TYPE="Daily Scan"
 
+# Hardcoded scan target for user warren
+SCAN_TARGET="/Users/warren"
+
 # Create directories
 mkdir -p "$LOG_DIR" "$QUARANTINE_DIR"
-
-# If no arguments, default to home directory
-TARGETS=("${@:-$HOME}")
 
 # Log file for this scan
 SCAN_LOG="$LOG_DIR/scan-$(date +%F).log"
@@ -54,43 +54,41 @@ fi
 echo "============================================" | tee -a "$SCAN_LOG"
 echo "ClamAV ${SCAN_TYPE} - $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$SCAN_LOG"
 echo "Using: $CLAMSCAN (standalone mode - full statistics)" | tee -a "$SCAN_LOG"
-echo "Targets: ${TARGETS[*]}" | tee -a "$SCAN_LOG"
+echo "Target: $SCAN_TARGET" | tee -a "$SCAN_LOG"
 echo "============================================" | tee -a "$SCAN_LOG"
 echo "" | tee -a "$SCAN_LOG"
 
 # Run clamscan with full output
-for TARGET in "${TARGETS[@]}"; do
-  echo "Scanning: $TARGET" | tee -a "$SCAN_LOG"
-  
-  "$CLAMSCAN" -r -i \
-    --move="$QUARANTINE_DIR" \
-    --exclude="\.viminfo$" \
-    --exclude="\.bnnsir$" \
-    --exclude="\.com\.apple\.containermanagerd\.metadata\.plist$" \
-    --exclude="com\.apple\.AddressBook\.plist$" \
-    --exclude="com\.apple\.homed.*\.plist$" \
-    --exclude="com\.apple\.MobileSMS\.plist$" \
-    --exclude-dir="\.git" \
-    --exclude-dir="node_modules" \
-    --exclude-dir="Library/Caches" \
-    --exclude-dir="\.Trash" \
-    --exclude-dir="Library/Application Support/Knowledge" \
-    --exclude-dir="Library/Application Support/com.apple.TCC" \
-    --exclude-dir="Library/Application Support/AddressBook" \
-    --exclude-dir="Library/Application Support/FaceTime" \
-    --exclude-dir="Library/Application Support/CallHistoryDB" \
-    --exclude-dir="Library/Autosave Information" \
-    --exclude-dir="Library/Group Containers" \
-    --exclude-dir="Library/Daemon Containers" \
-    --exclude-dir="Library/Biome" \
-    --exclude-dir="quarantine" \
-    --exclude-dir="/var/root/quarantine" \
-    "$TARGET" 2>&1 | tee -a "$SCAN_LOG" | tee -a "$SCAN_RESULT_FILE" || true
-done
+echo "Scanning: $SCAN_TARGET" | tee -a "$SCAN_LOG"
+
+"$CLAMSCAN" -r -i \
+  --move="$QUARANTINE_DIR" \
+  --exclude="\.viminfo$" \
+  --exclude="\.bnnsir$" \
+  --exclude="\.com\.apple\.containermanagerd\.metadata\.plist$" \
+  --exclude="com\.apple\.AddressBook\.plist$" \
+  --exclude="com\.apple\.homed.*\.plist$" \
+  --exclude="com\.apple\.MobileSMS\.plist$" \
+  --exclude-dir="\.git" \
+  --exclude-dir="node_modules" \
+  --exclude-dir="Library/Caches" \
+  --exclude-dir="\.Trash" \
+  --exclude-dir="Library/Application Support/Knowledge" \
+  --exclude-dir="Library/Application Support/com.apple.TCC" \
+  --exclude-dir="Library/Application Support/AddressBook" \
+  --exclude-dir="Library/Application Support/FaceTime" \
+  --exclude-dir="Library/Application Support/CallHistoryDB" \
+  --exclude-dir="Library/Autosave Information" \
+  --exclude-dir="Library/Group Containers" \
+  --exclude-dir="Library/Daemon Containers" \
+  --exclude-dir="Library/Biome" \
+  --exclude-dir="quarantine" \
+  --exclude-dir="/var/root/quarantine" \
+  "$SCAN_TARGET" 2>&1 | tee -a "$SCAN_LOG" | tee -a "$SCAN_RESULT_FILE" || true
 
 echo "" | tee -a "$SCAN_LOG"
 
-# Parse infected count - sum all infected counts from all targets
+# Parse infected count
 INFECTED_COUNT=$(grep -i "Infected files:" "$SCAN_RESULT_FILE" 2>/dev/null | awk '{sum += $3} END {print sum}' || echo "0")
 INFECTED_COUNT="${INFECTED_COUNT:-0}"
 if ! [[ "$INFECTED_COUNT" =~ ^[0-9]+$ ]]; then
