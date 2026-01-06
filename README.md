@@ -153,15 +153,15 @@ sudo fdesetup status
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
-## 2. ClamAV Setup (MacPorts) - Multi-User Configuration
+## 2. ClamAV Setup (MacPorts)
 
-> **Note on Email Notifications:** The scan scripts include email alerting, but this is **optional**. If email is not configured, the scripts will still work, and alerts simply will not be sent. To enable email notifications, complete the "Email Notifications Setup" section later in this guide.
+> **Note on Email Notifications:** The scan scripts include email alerting, but this is **optional**. If email is not configured, the scripts will still work - alerts simply won't be sent. To enable email notifications, complete the "Email Notifications Setup" section later in this guide.
 
-> **Multi-User Note:** This setup configures ClamAV to protect both the `admin` and `warren` (unprivileged) accounts. System daemons run as `root`, while on-access scanning runs per-user. See the table at the end of Section 2 for more permission details.
+> **Note on User Privileges:** This guide is configured for an unprivileged user `warren`. System daemons run as root for proper access, while user-level agents run as `warren`.
 
 ### Part 1: Base ClamAV Installation
-1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. Do **NOT** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
-2. Create directories with `root` ownership (system daemons run as root):
+ 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also do not give `daemondo` full-disk access because it is unnecessary.
+ 2. Set up ClamAV directories with proper ownership (root-owned for security):
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R root:wheel /opt/local/share/clamav
@@ -175,34 +175,31 @@ sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R root:wheel /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
-3. Set up Freshclam:
+ 3. Set up Freshclam:
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
-```
-```conf
+
 # Comment out:
 # Example
 
-# Uncomment:
+# Uncomment
 UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 DatabaseDirectory /opt/local/share/clamav
-DatabaseOwner root
 ```
 ```zsh
 sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
 ```
-4. Set up `clamd`:
+ 4. Set up `clamd`:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
-```
-```conf
+
 # Comment out:
 # Example
 
-# Uncomment:
+# Uncomment
 LocalSocket /opt/local/var/run/clamav/clamd.socket
 PidFile /opt/local/var/run/clamav/clamd.pid
 Foreground yes
@@ -212,44 +209,70 @@ LogVerbose yes
 LogRotate yes
 LogFileMaxSize 10M
 
-# Add for multi-user access (allows all users to connect to clamd socket):
-LocalSocketMode 666
-
-# Add to end (exclusions for performance):
-ExcludePath ^/Users/.*/\.git/
-ExcludePath ^/Users/.*/node_modules/
-ExcludePath ^/Users/.*/Library/Caches/
-ExcludePath ^/Users/.*/\.Trash/
-ExcludePath ^/Users/.*/Library/Application Support/Knowledge/
-ExcludePath ^/Users/.*/Library/Application Support/com\.apple\.TCC/
-ExcludePath ^/Users/.*/Library/Application Support/AddressBook/
-ExcludePath ^/Users/.*/Library/Application Support/FaceTime/
-ExcludePath ^/Users/.*/Library/Application Support/CallHistoryDB/
-ExcludePath ^/Users/.*/Library/Autosave Information/
-ExcludePath ^/Users/.*/\.viminfo$
-ExcludePath ^/Users/.*/\.bnnsir$
-ExcludePath ^/Users/.*/Library/Group Containers/
-ExcludePath ^/Users/.*/Library/Daemon Containers/
-ExcludePath ^/Users/.*/Library/Biome/
+# Add to end (exclusions for performance)
+ExcludePath ^/Users/warren/\.git/
+ExcludePath ^/Users/warren/node_modules/
+ExcludePath ^/Users/warren/Library/Caches/
+ExcludePath ^/Users/warren/\.Trash/
+ExcludePath ^/Users/warren/Library/Application Support/Knowledge/
+ExcludePath ^/Users/warren/Library/Application Support/com\.apple\.TCC/
+ExcludePath ^/Users/warren/Library/Application Support/AddressBook/
+ExcludePath ^/Users/warren/Library/Application Support/FaceTime/
+ExcludePath ^/Users/warren/Library/Application Support/CallHistoryDB/
+ExcludePath ^/Users/warren/Library/Autosave Information/
+ExcludePath ^/Users/warren/\.viminfo$
+ExcludePath ^/Users/warren/\.bnnsir$
+ExcludePath ^/Users/warren/Library/Group Containers/
+ExcludePath ^/Users/warren/Library/Daemon Containers/
+ExcludePath ^/Users/warren/Library/Biome/
 ExcludePath ^/private/var/folders/
 ExcludePath ^/System/
-ExcludePath ^/Users/.*/Library/Containers/.*/\.com\.apple\.containermanagerd\.metadata\.plist$
-ExcludePath ^/Users/.*/Library/Preferences/com\.apple\.AddressBook\.plist$
-ExcludePath ^/Users/.*/Library/Preferences/com\.apple\.homed.*\.plist$
-ExcludePath ^/Users/.*/Library/Preferences/com\.apple\.MobileSMS\.plist$
-ExcludePath ^/Users/.*/quarantine/
-ExcludePath ^/var/root/quarantine/
 ```
-5. Run freshclam to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified`, that is expected since clamd is not running yet.
+ 5. Run `freshclam` to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8.
 ```zsh
 sudo freshclam
 ```
-6. Create FDA app bundles for ClamAV binaries. On macOS Tahoe 26+, Full Disk Access is granted to specific binaries, not wrapper scripts. Now create app bundles containing copies of the actual binaries:
+ 6. Create clamd daemon:
 ```zsh
-# Create ClamAVDaemon.app with actual clamd binary
+sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.clamd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/opt/local/var/log/clamav/clamd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/opt/local/var/log/clamav/clamd-stderr.log</string>
+</dict>
+</plist>
+```
+```zsh
+sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
+```
+ 7. Wrap `clamd` inside an application to give it FDA access (MacOS Tahoe 26+, remember to give FDA in Settings after this step):
+```zsh
 sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
-sudo cp /opt/local/sbin/clamd /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
 
+sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
+#!/bin/bash
+exec /opt/local/sbin/clamd "$@"
+EOF
+
+sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+```
+```zsh
 sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -267,85 +290,7 @@ sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-7. Create ClamDScan.app with actual clamdscan binary:
-```zsh
-sudo mkdir -p /Applications/ClamDScan.app/Contents/MacOS
-sudo cp /opt/local/bin/clamdscan /Applications/ClamDScan.app/Contents/MacOS/ClamDScan
-
-sudo tee /Applications/ClamDScan.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamDScan</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamdscan</string>
-    <key>CFBundleName</key>
-    <string>ClamDScan</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-```
-8. Create FreshClam.app with actual freshclam binary:
-```zsh
-sudo mkdir -p /Applications/FreshClam.app/Contents/MacOS
-sudo cp /opt/local/bin/freshclam /Applications/FreshClam.app/Contents/MacOS/FreshClam
-
-sudo tee /Applications/FreshClam.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>FreshClam</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.freshclam</string>
-    <key>CFBundleName</key>
-    <string>FreshClam</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-```
-9. Go to **System Settings → Privacy & Security → Full Disk Access** and add `ClamAVDaemon.app`, `ClamDScan.app`, and `FreshClam.app`. Ensure the toggles are on.
-10. Create clamd daemon (runs as root for system-wide protection):
-```zsh
-sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.clamd</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon</string>
-    </array>
-    <key>UserName</key>
-    <string>root</string>
-    <key>GroupName</key>
-    <string>wheel</string>
-    <key>KeepAlive</key>
-    <true/>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/opt/local/var/log/clamav/clamd-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/opt/local/var/log/clamav/clamd-stderr.log</string>
-</dict>
-</plist>
-```
-```zsh
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-```
-11. Create freshclam daemon (for automatic database updates, runs as root):
+ 8. Create freshclam daemon (for automatic database updates):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -358,12 +303,8 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
     <string>com.personal.freshclam</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/FreshClam.app/Contents/MacOS/FreshClam</string>
+        <string>/opt/local/bin/freshclam</string>
     </array>
-    <key>UserName</key>
-    <string>root</string>
-    <key>GroupName</key>
-    <string>wheel</string>
     <key>StartInterval</key>
     <integer>3600</integer>
     <key>RunAtLoad</key>
@@ -378,20 +319,40 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
-12. **Checkpoint** - Verify base installation:
+ 9. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
+```zsh
+sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
+sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
+sudo rm -f /opt/local/var/run/clamav/freshclam.pid
+
+# This should be empty
+lsof | grep freshclam.log
+
+sudo rm /opt/local/var/log/clamav/freshclam.log
+sudo touch /opt/local/var/log/clamav/freshclam.log
+sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
+sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
+
+sudo rm /opt/local/share/clamav/daily.cvd
+sudo freshclam
+# Clamd successfully notified about the update.
+
+sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
+```
+ 10. **Checkpoint** - Verify base installation:
 ```zsh
 # Check daemons are running
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
 # -	0	com.personal.freshclam
 
-# Check socket exists with correct permissions (should be srw-rw-rw-)
+# Check socket exists
 ls -la /opt/local/var/run/clamav/clamd.socket
-# srw-rw-rw-  1 root  wheel  0 Jan  6 00:45 /opt/local/var/run/clamav/clamd.socket
+# srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
 
-# Check ClamAV version and database (works as any user due to socket permissions)
+# Check ClamAV version and database
 clamdscan --version
-# ClamAV 1.5.1/27563/Mon Jan  6 03:26:03 2026
+# ClamAV 1.5.1/27863/Sun Dec 28 15:26:03 2025
 
 # Test scan with EICAR
 cd ~/Downloads
@@ -401,73 +362,60 @@ clamdscan -i eicar-test.txt
 rm -f eicar-test.txt
 ```
 
-**Note:** EICAR is a dummy file that only contains a signature that triggers antivirus detection. It does not contain anything malicious.
+**Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
 
-**Note:** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
+**Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
 
-### Part 1-1: After MacPorts Updates ClamAV
-When MacPorts updates ClamAV (`sudo port upgrade outdated`), refresh the app bundles:
+### Part 2: Daily Scan Setup
+ 1. Create root-owned directories for logs and quarantine:
 ```zsh
-# Stop daemons
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
-sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
+sudo mkdir -p /var/root/clamav-logs
+sudo chown root:wheel /var/root/clamav-logs
+sudo chmod 700 /var/root/clamav-logs
 
-# Re-copy binaries
-sudo cp /opt/local/sbin/clamd /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
-sudo cp /opt/local/bin/clamdscan /Applications/ClamDScan.app/Contents/MacOS/ClamDScan
-sudo cp /opt/local/bin/freshclam /Applications/FreshClam.app/Contents/MacOS/FreshClam
-
-# Toggle FDA off then on for each app in System Settings
-
-# Restart daemons
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
+sudo mkdir -p /var/root/quarantine
+sudo chown root:wheel /var/root/quarantine
+sudo chmod 700 /var/root/quarantine
 ```
-
-### Part 1-2: Ensuring Warren Gets Permissions
-1. Add MacPorts to warren's PATH (both `.zshrc` and `.zprofile` for interactive and login shells):
-```zsh
-su - warren
-echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
-echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zprofile
-source ~/.zshrc
-
-# Verify
-clamdscan --version
-exit
-```
-2. Test that PATH persists in login shells:
-```zsh
-su - warren -c "clamdscan --version"
-# ClamAV 1.5.1/27871/...
-```
-3. Test scanning as warren:
-```zsh
-su - warren
-cd ~/Downloads
-curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
-clamdscan eicar-test.txt
-# eicar-test.txt: Eicar-Test-Signature FOUND
-rm -f eicar-test.txt
-exit
-```
-
-### Part 2: Daily Scan Setup (Multi-User)
-
-1. Create the daily scan script (in this [repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-scan.sh)):
+ 2. Create the daily scan script (in this [repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-scan.sh)):
 ```zsh
 sudo mkdir -p /usr/local/bin 
 sudo vi /usr/local/bin/clamav-scan.sh
 ```
 ```zsh
-sudo chmod 755 /usr/local/bin/clamav-scan.sh
+sudo chmod +x /usr/local/bin/clamav-scan.sh
 ```
+ 3. Create a permission wrapper that scans warren's home directory:
+```zsh
+sudo vi /usr/local/bin/clamav-wrapper.c
+```
+```c
+#include <unistd.h>
+#include <stdio.h>
 
-2. Create the scan app with FDA. On macOS Tahoe, we copy `/bin/bash` into the app bundle so that bash itself has FDA when running the script:
+int main(int argc, char *argv[]) {
+    char *args[] = {"/bin/bash", "/usr/local/bin/clamav-scan.sh", "/Users/warren", NULL};
+    execv("/bin/bash", args);
+    perror("execv failed");
+    return 1;
+}
+```
+```zsh
+sudo gcc -o /usr/local/bin/clamav-wrapper /usr/local/bin/clamav-wrapper.c
+sudo chmod +x /usr/local/bin/clamav-wrapper
+```
+ 4. Give wrapper permissions to run full-disk scans (secure because this app is only manually triggered by admin, and FDA will not accept unsigned binaries):
 ```zsh
 sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
-sudo cp /bin/bash /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
 
+sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
+#!/bin/bash
+/usr/local/bin/clamav-scan.sh /Users/warren
+EOF
+
+sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
+```
+```zsh
 sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -485,10 +433,8 @@ sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 ```
-
-3. Add `/Applications/ClamAVScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
-
-4. Create LaunchDaemon for daily scans. Note: the script path and arguments are passed to the bash binary:
+ 5. Add `/Applications/ClamAVScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
+ 6. Create LaunchDaemon for daily scans (runs at 4am as root):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
@@ -502,14 +448,7 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan</string>
-        <string>/usr/local/bin/clamav-scan.sh</string>
-        <string>/Users/admin</string>
-        <string>/Users/warren</string>
     </array>
-    <key>UserName</key>
-    <string>root</string>
-    <key>GroupName</key>
-    <string>wheel</string>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -517,29 +456,17 @@ sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
         <key>Minute</key>
         <integer>0</integer>
     </dict>
-    <key>AbandonProcessGroup</key>
-    <true/>
     <key>StandardOutPath</key>
-    <string>/opt/local/var/log/clamav/clamscan-stdout.log</string>
+    <string>/var/root/clamav-logs/clamscan-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/opt/local/var/log/clamav/clamscan-stderr.log</string>
+    <string>/var/root/clamav-logs/clamscan-stderr.log</string>
 </dict>
 </plist>
 ```
-
-> **Important:** The `AbandonProcessGroup` key is required because the scan script spawns background processes (osascript dialogs). Without this key, launchd will kill these child processes when the main script exits, preventing notifications from displaying.
-
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 ```
-
-5. If LaunchDaemon times are changed, remember to restart Clamscan:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-```
-
-6. **Checkpoint** - Verify daily scan setup (also re-verifies Part 1):
+ 7. **Checkpoint** - Verify daily scan setup (also re-verifies Part 1):
 ```zsh
 # Re-verify daemons from Part 1
 sudo launchctl list | grep com.personal
@@ -547,48 +474,46 @@ sudo launchctl list | grep com.personal
 # -	0	com.personal.freshclam
 # -	0	com.personal.clamscan -- there is no PID because it only runs periodically
 
-# Test daily scan manually (creates test files in both user directories)
-curl -L -o ~/Downloads/eicar-admin-test.txt https://secure.eicar.org/eicar.com.txt
-su - warren -c "curl -L -o ~/Downloads/eicar-warren-test.txt https://secure.eicar.org/eicar.com.txt"
-
-sudo launchctl start com.personal.clamscan
+# Test daily scan manually
+curl -L -o ~/Downloads/eicar-daily-test.txt https://secure.eicar.org/eicar.com.txt
+sudo /usr/local/bin/clamav-scan.sh /Users/warren/Downloads
 # Expected: 
-#  - "2 infected file(s) found" message (one from each user)
-#  - files moved to /var/root/quarantine/
+#  - "1 infected file(s) found" message
+#  - file moved to /var/root/quarantine/
 #  - dialog notification appears
 #  - email NOT sent yet (email setup is next)
 
 # Check log was created
-sudo tail -30 /var/root/clamav-logs/scan-$(date +%F).log
+sudo tail -20 /var/root/clamav-logs/scan-$(date +%F).log
+# ----------- SCAN SUMMARY -----------
+# Known viruses: 3701067
+# Engine version: 1.5.1
+# Scanned directories: 1
+# Scanned files: 2
+# ...
 
-# Check quarantine has files from both users
+# Check quarantine
 sudo ls /var/root/quarantine/
-# eicar-admin-test.txt  eicar-warren-test.txt
-
-# Cleanup
-sudo bash -c 'rm -rf /var/root/quarantine/*'
+# eicar-daily-test.txt
 ```
 
 ### Part 3: Email Notifications
-
 > Skip this section if you don't want email alerts. The scan scripts will work fine without email - alerts simply won't be sent.
 
-1. To generate a Gmail App Password:
+ 1. To generate a Gmail App Password:
    - Go to https://myaccount.google.com/security
    - Enable 2-Step Verification if not already enabled
    - Search for "App passwords"
    - Generate a new app password for "Mail"
-   - Use that 16-character password in the file below
-
-2. Create SASL password file:
+   - Use that 16-character password in the file above
+ 2. Create SASL password file:
 ```zsh
 sudo vi /etc/postfix/sasl_passwd
 
 # Add (replace with your email and app password):
-[smtp.gmail.com]:587 your-email@gmail.com:YOUR_APP_PASSWORD_HERE
+[smtp.gmail.com]:587 yjwarrenwang@gmail.com:YOUR_APP_PASSWORD_HERE
 ```
-
-3. Configure postfix and click "Allow" for prompted notification:
+ 3. Configure postfix and click "Allow" for prompted notification:
 ```zsh
 sudo vi /etc/postfix/main.cf
 
@@ -603,27 +528,24 @@ smtp_tls_security_level = encrypt
 smtp_tls_CAfile = /etc/ssl/cert.pem
 smtp_address_preference = ipv4
 ```
-
-4. Secure and hash password file:
+ 4. Secure and hash password file:
 ```zsh
 sudo chmod 600 /etc/postfix/sasl_passwd
 sudo postmap /etc/postfix/sasl_passwd
 ```
-
-5. Start postfix:
+ 5. Start postfix:
 ```zsh
 sudo postfix start
 sudo postfix reload
 ```
-
-6. **Checkpoint** - Verify email AND re-verify Parts 1-2:
+ 6. **Checkpoint** - Verify email AND re-verify Parts 1-2:
 ```zsh
-# Test email directly
-echo "Test email from ClamAV setup" | mail -s "ClamAV Test" your-email@gmail.com
+# test email directly
+echo "Test email from ClamAV setup" | mail -s "ClamAV Test" yjwarrenwang@gmail.com
 sleep 5
 mailq
 # Mail queue is empty
-# Check inbox for the test email, might need a minute
+# check inbox for the test email, might need a minute
 
 # Re-verify all daemons
 sudo launchctl list | grep com.personal
@@ -631,73 +553,42 @@ sudo launchctl list | grep com.personal
 # -	0	com.personal.freshclam
 # -	0	com.personal.clamscan
 
-# Full integration test with email (both users)
-curl -L -o ~/Downloads/eicar-admin-email.txt https://secure.eicar.org/eicar.com.txt
-su - warren -c "curl -L -o ~/Downloads/eicar-warren-email.txt https://secure.eicar.org/eicar.com.txt"
-
-sudo launchctl start com.personal.clamscan
+# Full integration test with email
+curl -L -o ~/Downloads/eicar-email-test.txt https://secure.eicar.org/eicar.com.txt
+sudo /usr/local/bin/clamav-scan.sh /Users/warren/Downloads
 # Expected:
-#   - scan completes finding 2 infected files
+#   - scan completes
 #   - dialog notification appears
-#   - email IS sent (check inbox)
+#   - email IS sent this time (check inbox)
 #   - log shows "Email sent successfully"
 
-sudo tail -20 /var/root/clamav-logs/scan-$(date +%F).log
-# Should show "2 infected file(s) found" and "Email sent successfully"
-
-# Cleanup
-sudo bash -c 'rm -rf /var/root/quarantine/*'
+sudo tail -10 /var/root/clamav-logs/scan-$(date +%F).log
+# "Email sent successfully" somewhere
+sudo rm -rf /var/root/quarantine/*
 ```
 
-### Part 4: On-Access Scanning (Per-User)
-
+### Part 4: On-Access Scanning
 > There is no official on-access scanning on macOS (only Linux via `fanotify`). This uses `fswatch` as a workaround for real-time file monitoring.
 
-> **Multi-User Note:** On-access scanning runs per-user via LaunchAgents. Each user gets their own instance that monitors their own directories.
-
-1. Install `fswatch`:
+ 1. Install `fswatch`:
 ```zsh
 sudo port install fswatch
 ```
-
-2. Create the on-access scan script (also in [this repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-onaccess.sh)):
+ 2. Create user-level directories for on-access logs and quarantine:
+```zsh
+mkdir -p /Users/warren/clamav-logs
+mkdir -p /Users/warren/quarantine
+```
+ 3. Create the on-access scan script (also in [this repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-onaccess.sh)):
 ```zsh
 sudo vi /usr/local/bin/clamav-onaccess.sh
 # ...
 ```
 ```zsh
-# Make executable by all users
-sudo chmod 755 /usr/local/bin/clamav-onaccess.sh
+sudo chmod +x /usr/local/bin/clamav-onaccess.sh
 ```
-
-3. Create the on-access wrapper app with FDA. Like Part 2, we copy `/bin/bash` into the app bundle:
+ 4. Create LaunchAgent (runs as user, not system, so do not give sudo):
 ```zsh
-sudo mkdir -p /Applications/ClamAVOnAccess.app/Contents/MacOS
-sudo cp /bin/bash /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess
-
-sudo tee /Applications/ClamAVOnAccess.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamAVOnAccess</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamav-onaccess</string>
-    <key>CFBundleName</key>
-    <string>ClamAVOnAccess</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-```
-
-4. Add `/Applications/ClamAVOnAccess.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
-
-5. Create LaunchAgent for admin user (runs as admin, monitors admin's directories). Note: the script path is passed as an argument to the bash binary:
-```zsh
-# Run as admin user (not sudo)
 mkdir -p ~/Library/LaunchAgents
 vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 ```
@@ -710,7 +601,6 @@ vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
     <string>com.personal.clamav-onaccess</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess</string>
         <string>/usr/local/bin/clamav-onaccess.sh</string>
     </array>
     <key>RunAtLoad</key>
@@ -724,80 +614,29 @@ vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 </dict>
 </plist>
 ```
-
-> **Note:** The on-access script has built-in logic to wait up to 120 seconds for the clamd socket to become available after a restart. This eliminates the need for manual script execution after system boots.
-
+ 5. Load the LaunchAgent:
 ```zsh
-# Load for admin user
 launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
 ```
-
-6. Create LaunchAgent for warren user (runs as warren, monitors warren's directories):
+ 6. **Checkpoint** - Full system verification (verifies everything):
 ```zsh
-# Switch to warren or run these commands as warren
-su - warren
-
-# Create LaunchAgents directory
-mkdir -p ~/Library/LaunchAgents
-
-# Create the plist (same content, but runs in warren's context)
-cat > ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.clamav-onaccess</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess</string>
-        <string>/usr/local/bin/clamav-onaccess.sh</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/clamav-onaccess-warren-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/clamav-onaccess-warren-stderr.log</string>
-</dict>
-</plist>
-EOF
-
-# Load for warren user
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-
-# Exit back to admin
-exit
-```
-
-7. **Checkpoint** - Full system verification (verifies everything):
-```zsh
-# Verify all system daemons (as admin with sudo)
+# Verify all daemons
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
 # -	0	com.personal.freshclam
 # -	0	com.personal.clamscan
 
-# Verify admin's on-access agent
 launchctl list | grep clamav-onaccess
 # 1825	0	com.personal.clamav-onaccess
 
-# Verify warren's on-access agent
-su - warren -c "launchctl list | grep clamav-onaccess"
-# 1830	0	com.personal.clamav-onaccess
-
-# Check fswatch is running for both users
 ps aux | grep fswatch | grep -v grep
-# admin  ... /opt/local/bin/fswatch -0 -r -l 2...
-# warren ... /opt/local/bin/fswatch -0 -r -l 2...
+# /opt/local/bin/fswatch -0 -r -l 2...
 
-# Verify clamd socket (should be accessible by all users)
+# Verify clamd socket
 ls -la /opt/local/var/run/clamav/clamd.socket
 # srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
 
-# Test on-access scanning for admin
+# Test on-access scanning
 # Terminal 1:
 tail -f ~/clamav-logs/onaccess-$(date +%F).log
 
@@ -811,54 +650,25 @@ curl -L -o eicar-onaccess-test.txt https://secure.eicar.org/eicar.com.txt
 # Expected on screen:
 #   - notification appears
 #   - dialog "ClamAV On-Access Alert"
-#   - email received (if configured)
-rm -rf ~/quarantine/*
+#   - email received
 
-# Test on-access in home directory directly
-curl -L -o ~/eicar-home-test.txt https://secure.eicar.org/eicar.com.txt
-# Expected: same alerts as above
-rm -rf ~/quarantine/*
-
-# Test clean files (should not alert)
+# Test small file (should not alert, <50B unlikely to be virus)
 echo "normal content" > ~/Downloads/clean-test.txt
-# Expected in log: "Clean" (or skipped if < 50 bytes)
+# Expected in log: "Clean"
 
-# Verify email queue is clear
+# Test clean file (should not alert)
+echo "longer content that should be larger than 50 bytes" > ~/Downloads/clean-test2.txt
+# Expected in log: "Clean"
+
+# Verify email
 mailq
 # "Mail queue is empty"
 
-# Check logs exist for both users
+# Check all logs exist
 ls -la ~/clamav-logs/
-ls -la /Users/warren/clamav-logs/
-# Expected: onaccess-YYYY-MM-DD.log in each
-```
-
-**Note:** If testing for daily scan at this step, make sure that all on-access processes are killed, across all users:
-```zsh
-ps aux | grep fswatch | grep -v grep
-sudo kill -9 <PID>
-```
-
-### After macOS or MacPorts Updates
-
-When macOS updates `/bin/bash` or after major OS upgrades, refresh the app bundles:
-
-```zsh
-# Stop services
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
-launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-su - warren -c "launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist"
-
-# Re-copy bash binary
-sudo cp /bin/bash /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
-sudo cp /bin/bash /Applications/ClamAVOnAccess.app/Contents/MacOS/ClamAVOnAccess
-
-# Toggle FDA off then on for ClamAVScan.app and ClamAVOnAccess.app in System Settings
-
-# Restart services
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-su - warren -c "launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist"
+# Expected: onaccess-YYYY-MM-DD.log
+sudo ls -la /var/root/clamav-logs/
+# Expected: scan-YYYY-MM-DD.log
 ```
 
 ### Cleanup: Remove Default MacPorts Services
@@ -876,10 +686,8 @@ sudo launchctl list | grep org.macports
 ```
 
 ### Ref: Restart Commands
-
 If something is not working, restart the relevant service:
 ```zsh
-# System daemons (run as admin with sudo)
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 
@@ -889,76 +697,26 @@ sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
 
-# Trigger daily scan manually
+launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
+
 sudo launchctl start com.personal.clamscan
-
-# On-access for admin (run as admin, no sudo)
-launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-
-# On-access for warren (run as warren, no sudo)
-su - warren
-launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-exit
 ```
 
 ### Ref: Log Locations
-
 ```zsh
-# Daily scan (runs as root)
-/var/root/clamav-logs/scan-$(date +%F).log
+# Daily scan (root-owned)
+sudo cat /var/root/clamav-logs/scan-$(date +%F).log
 
-# On-access for admin
-~/clamav-logs/onaccess-$(date +%F).log
+# On-access (user-owned)
+cat ~/clamav-logs/onaccess-$(date +%F).log
 
-# On-access for warren
-/Users/warren/clamav-logs/onaccess-$(date +%F).log
+# ClamAV daemon (root-owned)
+sudo cat /opt/local/var/log/clamav/clamd.log
 
-# ClamAV daemon
-/opt/local/var/log/clamav/clamd.log
-
-# Freshclam
-/opt/local/var/log/clamav/freshclam.log
-
-# Quarantine locations
-/var/root/quarantine/           # Daily scan quarantine
-~/quarantine/                   # Admin on-access quarantine
-/Users/warren/quarantine/       # Warren on-access quarantine
+# Freshclam (root-owned)
+sudo cat /opt/local/var/log/clamav/freshclam.log
 ```
-
-### Ref: Multi-User Architecture Summary
-
-| Component | Type | Runs As | Scope | FDA Required |
-|-----------|------|---------|-------|--------------|
-| clamd | LaunchDaemon | root | System-wide | Yes (ClamAVDaemon.app) |
-| freshclam | LaunchDaemon | root | System-wide | No |
-| Daily scan | LaunchDaemon | root | Scans all users | Yes (ClamAVScan.app) |
-| On-access (admin) | LaunchAgent | admin | admin's files | Yes (ClamAVOnAccess.app) |
-| On-access (warren) | LaunchAgent | warren | warren's files | Yes (ClamAVOnAccess.app) |
-
-### Ref: Troubleshooting
-
-**Daily scan doesn't run automatically:**
-1. Verify the plist has `AbandonProcessGroup` set to `true`
-2. Check if the system was asleep at the scheduled time (macOS won't wake for StartCalendarInterval)
-3. Verify the daemon is loaded: `sudo launchctl list | grep clamscan`
-4. Check logs: `sudo tail -50 /opt/local/var/log/clamav/clamscan-stderr.log`
-
-**On-access doesn't work after restart:**
-1. Check if the script is waiting for clamd: `tail -f ~/clamav-logs/onaccess-$(date +%F).log`
-2. Verify clamd is running: `sudo launchctl list | grep clamd`
-3. Test clamd responsiveness: `clamdscan --version`
-4. If stuck waiting, restart clamd first, then the on-access agent
-
-**Permission denied errors:**
-1. Verify FDA is enabled for the relevant .app wrapper in **Settings > Privacy & Security > Full Disk Access**
-2. For macOS Sonoma (15): binaries may need separate authentication - check Settings
-3. Restart the relevant daemon/agent after enabling FDA
-
-**On-access not catching files in home directory:**
-1. Ensure the on-access script includes `$HOME` in `WATCH_PATHS`
-2. Restart the on-access agent after updating the script
 
 <sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
 <sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
