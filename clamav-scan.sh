@@ -25,21 +25,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Auto-detect clamscan location
-CLAMSCAN=""
-for p in \
-  /opt/local/bin/clamscan \
-  /usr/local/bin/clamscan \
-  /opt/homebrew/bin/clamscan
-do
-  if [[ -x "$p" ]]; then
-    CLAMSCAN="$p"
-    break
-  fi
-done
+# Use the FDA-wrapped clamscan
+CLAMSCAN="/Applications/ClamScan.app/Contents/MacOS/ClamScan"
 
-if [[ -z "$CLAMSCAN" ]]; then
-  echo "[!] clamscan not found. Please check your installation path." >&2
+if [[ ! -x "$CLAMSCAN" ]]; then
+  echo "[!] ClamScan.app wrapper not found at $CLAMSCAN" >&2
+  echo "[!] Please ensure the wrapper is created and has FDA access." >&2
   exit 2
 fi
 
