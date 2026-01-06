@@ -15,20 +15,7 @@
  - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin
    - If the administrative binaries configured in this guide do not affect the unprivileged user, double-check the writeout because they should
    - Also install security apps (e.g., Murus, pf configurators) in Admin, because they work better with full-system access
-
-### Security Baselines
-#### Option 1: NIST Configuration (Recommended)
- - Load NIST's MacOS Security configuration with [CNSSI-1253_high](https://github.com/usnistgov/macos_security/blob/2ac6b9078edf2cc521ca90450111e32de164916a/baselines/cnssi-1253_high.yaml)
-   - CNSSI-1253 is the selected baseline in this example as it covers most settings without requiring an antivirus
-   - Run the configurator to alter some rules, e.g., disable smart card for those who do not have one
-
-#### Option 2: Manual Configuration
- - If one does not want to load the NIST configuration, they can do the following instead:
-   - Enable FileVault, Firewall, and [GateKeeper](https://dev.to/reybis/enable-gatekeeper-macos-1klh)
-   - Disable AirDrop, [Remote Login](https://support.apple.com/en-gb/guide/mac-help/mchlp1066/mac), [Remote Desktop](https://support.apple.com/en-za/guide/mac-help/mh11851/mac), and all [remote access](https://support.apple.com/guide/remote-desktop/enable-remote-management-apd8b1c65bd/mac) sharing settings
-   - Disable [Bonjour](https://www.tenable.com/audits/items/CIS_Apple_macOS_10.13_v1.1.0_Level_2.audit:d9dcee7e4d2b8d2ee54f437158992d88) and [Guest User](https://discussions.apple.com/thread/253375291?sortBy=rank) if possible
-   - Disable location at all times (personal preference; can be adjusted)
-
+ 
 ### Extra Checklist
  - Terminal
    - Ensure that [Full Security](https://support.apple.com/en-za/guide/mac-help/mchl768f7291/mac), [SIP](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/ConfiguringSystemIntegrityProtection/ConfiguringSystemIntegrityProtection.html), and [secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) are enabled
@@ -42,7 +29,7 @@
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
 
 ### Note
-This section reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party surveillance. 
+This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party surveillance. 
 
 <sup>https://taoofmac.com/space/howto/switch#best-practices</sup><br/>
 <sup>https://support.addigy.com/hc/en-us/articles/4403726652435-Recommended-macOS-Security-Configurations</sup><br/>
@@ -50,7 +37,7 @@ This section reflects the "secure, not private" concept in that, although these 
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. NIST Setup
- > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Avoid using packages to keep dependency tree clean.
+ > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Install XCode/MacPorts in admin and not in Warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
 
 Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
 
@@ -160,7 +147,7 @@ sudo fdesetup status
 > **Note on User Privileges:** This guide is configured for an unprivileged user `warren`. System daemons run as root for proper access, while user-level agents run as `warren`.
 
 ### Part 1: Base ClamAV Installation
- 1. This ClamAV port creates all configurations already. Install MacPorts in admin through GUI, and run `su - admin` in Warren to get the privileged shell.
+ 1. This ClamAV port creates all configurations already. Run `su - admin` in Warren to get the privileged shell and access MacPorts.
  2. Install ClamAV from MacPorts: `sudo port install clamav-server`. Do **not** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
  3. Set up ClamAV directories with proper ownership (root-owned for security):
 ```zsh
@@ -176,7 +163,7 @@ sudo mkdir -p /opt/local/var/run/clamav
 sudo chown -R root:wheel /opt/local/var/run/clamav
 sudo chmod 755 /opt/local/var/run/clamav
 ```
- 3. Set up Freshclam:
+ 4. Set up Freshclam:
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
 ```
@@ -195,7 +182,7 @@ sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
 ```
- 4. Set up `clamd`:
+ 5. Set up Clamd:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
 ```
@@ -232,10 +219,6 @@ ExcludePath ^/Users/warren/Library/Biome/
 ExcludePath ^/private/var/folders/
 ExcludePath ^/System/
 ```
- 5. Download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: No such file or directory`, keep proceeding.
-```zsh
-sudo freshclam
-```
  6. Wrap `clamd` inside an application to give it FDA access (macOS Tahoe 26+):
 ```zsh
 sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
@@ -263,8 +246,42 @@ sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
 </dict>
 </plist>
 EOF
+
+# Code sign the app (required for FDA on macOS Tahoe 26+)
+sudo codesign --force --sign - /Applications/ClamAVDaemon.app
 ```
- 7. Create clamd LaunchDaemon (references the wrapper created above):
+ 7. Wrap `clamdscan` (the client) inside an application to give it FDA access (required for scanning files as unprivileged user):
+```zsh
+sudo mkdir -p /Applications/ClamdScan.app/Contents/MacOS
+
+sudo tee /Applications/ClamdScan.app/Contents/MacOS/ClamdScan << 'EOF'
+#!/bin/bash
+exec /opt/local/bin/clamdscan --fdpass "$@"
+EOF
+
+sudo chmod +x /Applications/ClamdScan.app/Contents/MacOS/ClamdScan
+
+sudo tee /Applications/ClamdScan.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>ClamdScan</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.clamdscan</string>
+    <key>CFBundleName</key>
+    <string>ClamdScan</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+
+# Code sign the app (required for FDA on macOS Tahoe 26+)
+sudo codesign --force --sign - /Applications/ClamdScan.app
+```
+ 8. Create `clamd` LaunchDaemon:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```
@@ -290,11 +307,17 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 </dict>
 </plist>
 ```
- 8. Add `/Applications/ClamAVDaemon.app` to FDA (**Settings > Privacy & Security > Full Disk Access**), then load the daemon:
+ 9. Add the following apps to FDA (**Settings > Privacy & Security > Full Disk Access**):
+   - `/Applications/ClamAVDaemon.app`
+   - `/Applications/ClamdScan.app`
+   
+   Then load the daemon:
 ```zsh
+# Let sleep for a bit for FDA permission to take effect
+sleep 5
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
- 9. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
+ 10. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
 ```zsh
 sudo mkdir -p /Applications/FreshclamDaemon.app/Contents/MacOS
 
@@ -304,8 +327,7 @@ exec /opt/local/bin/freshclam "$@"
 EOF
 
 sudo chmod +x /Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon
-```
-```zsh
+
 sudo tee /Applications/FreshclamDaemon.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -322,8 +344,11 @@ sudo tee /Applications/FreshclamDaemon.app/Contents/Info.plist << 'EOF'
 </dict>
 </plist>
 EOF
+
+# Code sign the app
+sudo codesign --force --sign - /Applications/FreshclamDaemon.app
 ```
- 10. Create freshclam LaunchDaemon (for automatic database updates):
+ 11. Create Freshclam LaunchDaemon (for automatic database updates), and also give `FreshclamDaemon.app` full disk access:
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -349,13 +374,8 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </dict>
 </plist>
 ```
+ 12. Run this sequence to start Clamd fresh and ensure that `freshclam` notifies `clamd` daemon:
 ```zsh
-# Also add FreshclamDaemon to full disk access in Settings before this step
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
-```
- 11. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
 sudo rm -f /opt/local/var/run/clamav/freshclam.pid
 
@@ -363,19 +383,21 @@ sudo rm -f /opt/local/var/run/clamav/freshclam.pid
 lsof | grep freshclam.log
 
 sudo rm /opt/local/var/log/clamav/freshclam.log
+sudo rm /opt/local/share/clamav/daily.cvd
 sudo touch /opt/local/var/log/clamav/freshclam.log
 sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
 sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
 
-sudo rm /opt/local/share/clamav/daily.cvd
+# Important: run as sudo
 sudo freshclam
 # Clamd successfully notified about the update.
 
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 12. **Checkpoint** - Verify base installation:
+ 13. **Checkpoint** - Verify base installation:
 ```zsh
-# Check daemons are running
+# Check daemons are running, wait for freshclam to finish first
+sleep 5
 sudo launchctl list | grep com.personal
 # 1234	0	com.personal.clamd
 # -	0	com.personal.freshclam
@@ -383,17 +405,30 @@ sudo launchctl list | grep com.personal
 # Check socket exists
 ls -la /opt/local/var/run/clamav/clamd.socket
 # srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
+```
+```zsh
+# Switch back to Warren
+su - warren
 
-# Check ClamAV version and database
-clamdscan --version
+# Add MacPorts to PATH (one-time setup)
+echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
+echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zprofile
+source ~/.zshrc
+
+# Check ClamAV version and database (use wrapped clamdscan)
+/Applications/ClamdScan.app/Contents/MacOS/ClamdScan --version
 # ClamAV 1.5.1/27863/Sun Dec 28 15:26:03 2025
 
-# Test scan with EICAR
+# Test scan with EICAR (use wrapped clamdscan for FDA access)
 cd ~/Downloads
 curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
-clamdscan -i eicar-test.txt
+/Applications/ClamdScan.app/Contents/MacOS/ClamdScan -i eicar-test.txt
 # eicar-test.txt: Eicar-Test-Signature FOUND
 rm -f eicar-test.txt
+
+# Optional: create an alias for convenience
+echo 'alias clamdscan="/Applications/ClamdScan.app/Contents/MacOS/ClamdScan"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
 **Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
