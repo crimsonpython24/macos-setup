@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Configuration
-LOG_FILE="$HOME/clamav-logs/onaccess-$(date +%F).log"
-QUARANTINE_DIR="$HOME/quarantine"
+# Configuration - hardcoded for user warren
+LOG_FILE="/Users/warren/clamav-logs/onaccess-$(date +%F).log"
+QUARANTINE_DIR="/Users/warren/quarantine"
 CLAMD_SOCKET="/opt/local/var/run/clamav/clamd.socket"
 EMAIL="yjwarrenwang@gmail.com"
 SCAN_TYPE="On-Access"
@@ -61,16 +61,16 @@ wait_for_clamd() {
 }
 
 # ============================================================================
-# Watch Paths Configuration
+# Watch Paths Configuration - hardcoded for /Users/warren
 # ============================================================================
 WATCH_PATHS=(
     # Home directory itself (for files directly in ~)
-    "$HOME"
+    "/Users/warren"
     
-    # User directories (these are redundant now but kept for clarity)
-    "$HOME/Downloads"
-    "$HOME/Desktop"
-    "$HOME/Documents"
+    # User directories
+    "/Users/warren/Downloads"
+    "/Users/warren/Desktop"
+    "/Users/warren/Documents"
     
     # Temporary directories
     "/tmp"
@@ -78,32 +78,32 @@ WATCH_PATHS=(
     "${TMPDIR:-/tmp}"
     
     # Browser data (downloads, cache, extensions)
-    "$HOME/Library/Application Support/Google/Chrome"
-    "$HOME/Library/Application Support/Firefox"
-    "$HOME/Library/Application Support/Microsoft Edge"
-    "$HOME/Library/Application Support/BraveSoftware"
-    "$HOME/Library/Containers/com.apple.Safari"
-    "$HOME/Library/Safari"
+    "/Users/warren/Library/Application Support/Google/Chrome"
+    "/Users/warren/Library/Application Support/Firefox"
+    "/Users/warren/Library/Application Support/Microsoft Edge"
+    "/Users/warren/Library/Application Support/BraveSoftware"
+    "/Users/warren/Library/Containers/com.apple.Safari"
+    "/Users/warren/Library/Safari"
     
     # Package managers and dev tools
     "/opt/local/var/macports/distfiles"
-    "$HOME/.cargo/registry"
-    "$HOME/.npm/_cacache"
-    "$HOME/go/pkg/mod"
+    "/Users/warren/.cargo/registry"
+    "/Users/warren/.npm/_cacache"
+    "/Users/warren/go/pkg/mod"
     
     # Mail attachments
-    "$HOME/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"
-    "$HOME/Library/Mail/V*/*/Attachments"
+    "/Users/warren/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"
+    "/Users/warren/Library/Mail"
     
     # Messaging apps
-    "$HOME/Library/Application Support/Telegram Desktop"
-    "$HOME/Library/Group Containers/"*".com.apple.iChat"
-    "$HOME/Library/Application Support/Signal"
-    "$HOME/Library/Application Support/Discord"
-    "$HOME/Library/Application Support/Slack"
+    "/Users/warren/Library/Application Support/Telegram Desktop"
+    "/Users/warren/Library/Group Containers/"*".com.apple.iChat"
+    "/Users/warren/Library/Application Support/Signal"
+    "/Users/warren/Library/Application Support/Discord"
+    "/Users/warren/Library/Application Support/Slack"
     
     # Archive extraction locations
-    "$HOME/Library/Application Support/The Unarchiver"
+    "/Users/warren/Library/Application Support/The Unarchiver"
 )
 
 # Exclusion patterns (high-churn or system-managed)
