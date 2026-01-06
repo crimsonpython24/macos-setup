@@ -160,8 +160,9 @@ sudo fdesetup status
 > **Note on User Privileges:** This guide is configured for an unprivileged user `warren`. System daemons run as root for proper access, while user-level agents run as `warren`.
 
 ### Part 1: Base ClamAV Installation
- 1. Install ClamAV from MacPorts: `sudo port install clamav-server`. This ClamAV port creates all non-example configurations already. *Important* do NOT execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts; also do not give `daemondo` full-disk access because it is unnecessary.
- 2. Set up ClamAV directories with proper ownership (root-owned for security):
+ 1. This ClamAV port creates all configurations already. Install MacPorts in admin through GUI, and run `su - admin` in Warren to get the privileged shell.
+ 2. Install ClamAV from MacPorts: `sudo port install clamav-server`. Do **not** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
+ 3. Set up ClamAV directories with proper ownership (root-owned for security):
 ```zsh
 sudo mkdir -p /opt/local/share/clamav
 sudo chown -R root:wheel /opt/local/share/clamav
@@ -178,7 +179,8 @@ sudo chmod 755 /opt/local/var/run/clamav
  3. Set up Freshclam:
 ```zsh
 sudo vi /opt/local/etc/freshclam.conf
-
+```
+```conf
 # Comment out:
 # Example
 
@@ -186,6 +188,7 @@ sudo vi /opt/local/etc/freshclam.conf
 UpdateLogFile /opt/local/var/log/clamav/freshclam.log
 NotifyClamd /opt/local/etc/clamd.conf
 DatabaseDirectory /opt/local/share/clamav
+DatabaseOwner root
 ```
 ```zsh
 sudo touch /opt/local/var/log/clamav/freshclam.log
@@ -195,7 +198,8 @@ sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
  4. Set up `clamd`:
 ```zsh
 sudo vi /opt/local/etc/clamd.conf
-
+```
+```conf
 # Comment out:
 # Example
 
@@ -228,11 +232,39 @@ ExcludePath ^/Users/warren/Library/Biome/
 ExcludePath ^/private/var/folders/
 ExcludePath ^/System/
 ```
- 5. Run `freshclam` to download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: Can't connect to clamd through /opt/local/var/run/clamav/clamd.socket: No such file or directory`, keep proceeding until step 8.
+ 5. Download the initial virus database (this may take a while). If it shows `WARNING: Clamd was NOT notified: No such file or directory`, keep proceeding.
 ```zsh
 sudo freshclam
 ```
- 6. Create clamd daemon:
+ 6. Wrap `clamd` inside an application to give it FDA access (macOS Tahoe 26+):
+```zsh
+sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
+
+sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
+#!/bin/bash
+exec /opt/local/sbin/clamd "$@"
+EOF
+
+sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+
+sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>ClamAVDaemon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.personal.clamav-daemon</string>
+    <key>CFBundleName</key>
+    <string>ClamAVDaemon</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+```
+ 7. Create clamd LaunchDaemon (references the wrapper created above):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 ```
@@ -258,39 +290,40 @@ sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
 </dict>
 </plist>
 ```
+ 8. Add `/Applications/ClamAVDaemon.app` to FDA (**Settings > Privacy & Security > Full Disk Access**), then load the daemon:
 ```zsh
 sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
 ```
- 7. Wrap `clamd` inside an application to give it FDA access (MacOS Tahoe 26+, remember to give FDA in Settings after this step):
+ 9. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
 ```zsh
-sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
+sudo mkdir -p /Applications/FreshclamDaemon.app/Contents/MacOS
 
-sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
+sudo tee /Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon << 'EOF'
 #!/bin/bash
-exec /opt/local/sbin/clamd "$@"
+exec /opt/local/bin/freshclam "$@"
 EOF
 
-sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
+sudo chmod +x /Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon
 ```
 ```zsh
-sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
+sudo tee /Applications/FreshclamDaemon.app/Contents/Info.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>ClamAVDaemon</string>
+    <string>FreshclamDaemon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.personal.clamav-daemon</string>
+    <string>com.personal.freshclam-daemon</string>
     <key>CFBundleName</key>
-    <string>ClamAVDaemon</string>
+    <string>FreshclamDaemon</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
 </dict>
 </plist>
 EOF
 ```
- 8. Create freshclam daemon (for automatic database updates):
+ 10. Create freshclam LaunchDaemon (for automatic database updates):
 ```zsh
 sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
@@ -303,7 +336,7 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
     <string>com.personal.freshclam</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/local/bin/freshclam</string>
+        <string>/Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon</string>
     </array>
     <key>StartInterval</key>
     <integer>3600</integer>
@@ -317,9 +350,10 @@ sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
 </plist>
 ```
 ```zsh
+# Also add FreshclamDaemon to full disk access in Settings before this step
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 9. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
+ 11. Since step 5 shows a warning, run this sequence to start Clamd and ensure that `freshclam` notifies the `clamd` daemon:
 ```zsh
 sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
 sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
@@ -339,7 +373,7 @@ sudo freshclam
 
 sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
 ```
- 10. **Checkpoint** - Verify base installation:
+ 12. **Checkpoint** - Verify base installation:
 ```zsh
 # Check daemons are running
 sudo launchctl list | grep com.personal
