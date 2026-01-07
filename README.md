@@ -4,26 +4,21 @@
 ### Administrative Account ("Admin")
 #### Principles
  - `launchd` should not be modified like `systemctl` as the former is not designed for user tweaks
-   - This rule also applies to "UI skins", custom plugins, etc. since they might break with future updates
+   - This rule also applies to "UI skins," custom plugins, etc. since they might break with future updates
    - I.e., one should not change any obscure settings (e.g., `defaults write com.apple.something`) unless they know exactly what they are doing
 
 #### App Installation Guidelines
  - Do not use the admin account besides initializing the machine
- - Do not install any application as Admin, as apps should run just fine without being installed from the root directory (i.e. `/Applications`)
+ - Do not install any apps as Admin unless necessary, as some should run just fine outside the root directory (i.e. `/Applications`)
    - Said apps will prompt for password if they need privilege escalations regardless
    - Do not move pre-/auto-installed MacOS apps around in Finder, because future updates might break those modifications
  - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin
-   - If the administrative binaries configured in this guide do not affect the unprivileged user, double-check the writeout because they should
-   - Also install security apps (e.g., Murus, pf configurators) in Admin, because they work better with full-system access
  
 ### Extra Checklist
  - Terminal
-   - Ensure that [Full Security](https://support.apple.com/en-za/guide/mac-help/mchl768f7291/mac), [SIP](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/ConfiguringSystemIntegrityProtection/ConfiguringSystemIntegrityProtection.html), and [secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) are enabled
+   - Ensure that [Secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) is enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
    - [Prevent](https://github.com/sunknudsen/guides/tree/main/archive/how-to-protect-mac-computers-from-cold-boot-attacks) cold-boot attacks
- - System Settings
-   - Even with NIST parameters active, one can still verify FileVault, Firewall, and related settings in the Settings app
-   - Disable automatic accessory access in "Settings -> Privacy & Security -> Accessories"
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
@@ -32,837 +27,12 @@
 This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party surveillance. 
 
 <sup>https://taoofmac.com/space/howto/switch#best-practices</sup><br/>
-<sup>https://support.addigy.com/hc/en-us/articles/4403726652435-Recommended-macOS-Security-Configurations</sup><br/>
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
-## 1. NIST Setup
- > For the following sections, all dependencies (Git, Python3) can be installed via MacPorts. Install XCode/MacPorts in admin and not in Warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
+## 1. DNS Setup
+ > For the following sections, all dependencies (Git, Python3...) can be installed via MacPorts. Install XCode/MacPorts in admin and not in Warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
 
-Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
-
- > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
-
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
-```zsh
-cd build
-mkdir baselines && cd baselines
-sudo vi cnssi-1253_cust.yaml
-```
- 2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
- 3. Install dependencies, recommended within a virtual environment.
-```zsh
-xcode-select --install
-sudo port install python314
-sudo port select --set python python314
-sudo port select --set python3 python314
-```
-```zsh
-cd ~/Desktop/macos_security
-python3 -m venv venv
-source venv/bin/activate
-python3 -m pip install --upgrade pip
-pip3 install pyyaml xlwt
-```
- 4. Optional: load custom ODVs (organization-defined values)
-```zsh
-cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
-odv:
-  custom: 12
-EOF
-
-cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
-odv:
-  custom: 5
-EOF
-
-cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
-odv:
-  custom: 0
-EOF
-```
- 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
-```zsh
-python3 scripts/generate_guidance.py \
-        -P \
-        -s \
-        -p \
-    build/baselines/cnssi-1253_cust.yaml
-```
- 6. Run the compliance script. If there is a previous profile installed, remove it in Settings before this step.
-```zsh
-sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
- 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%. Exit the tool.
- 8. Install the configuration profile (one might have to open the Settings app to install the profile):
-```zsh
-# Re-run this line if any of the YAML fields are edited (e.g., new ODVs)
-python3 scripts/generate_guidance.py \
-        -P \
-        -s \
-        -p \
-    build/baselines/cnssi-1253_cust.yaml
-```
-```zsh
-cd build/cnssi-1253_cust/mobileconfigs/unsigned
-sudo open cnssi-1253_cust.mobileconfig
-```
- 9. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 10. Exit (if not already) and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
-```zsh
-sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
- 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There will be a handful of them.
- 12. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 13. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
-```zsh
-os_firewall_default_deny_require
-system_settings_filevault_enforce
-```
- 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
-```zsh
-ls includes/enablePF-mscp.sh
-sudo bash includes/enablePF-mscp.sh
-
-sudo pfctl -a '*' -sr | grep "block drop in all"
-# Should output smt like "block drop in all" i.e. default deny all incoming
-sudo pfctl -s info
-# Should be running
-```
-```
-# FileVault
-sudo fdesetup status
-```
- 15. Note from previous step: one might encounter these two warnings
-   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
-   - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 16. The script should yield 100% compliance by running option 2, then option 1. Restart the device.
-
-**Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
-
-## 2. ClamAV Setup (MacPorts)
-
-> **Note on Email Notifications:** The scan scripts include email alerting, but this is **optional**. If email is not configured, the scripts will still work - alerts simply won't be sent. To enable email notifications, complete the "Email Notifications Setup" section later in this guide.
-
-> **Note on User Privileges:** This guide is configured for an unprivileged user `warren`. System daemons run as root for proper access, while user-level agents run as `warren`.
-
-### Part 1: Base ClamAV Installation
- 1. This ClamAV port creates all configurations already. Run `su - admin` in Warren to get the privileged shell and access MacPorts.
- 2. Install ClamAV from MacPorts: `sudo port install clamav-server`. Do **not** execute `sudo port load clamav-server` because doing so will conflict with this guide's startup scripts. Also do not give `daemondo` full-disk access because it is unnecessary.
- 3. Set up ClamAV directories with proper ownership (root-owned for security):
-```zsh
-sudo mkdir -p /opt/local/share/clamav
-sudo chown -R root:wheel /opt/local/share/clamav
-sudo chmod 755 /opt/local/share/clamav
-
-sudo mkdir -p /opt/local/var/log/clamav
-sudo chown -R root:wheel /opt/local/var/log/clamav
-sudo chmod 755 /opt/local/var/log/clamav
-
-sudo mkdir -p /opt/local/var/run/clamav
-sudo chown -R root:wheel /opt/local/var/run/clamav
-sudo chmod 755 /opt/local/var/run/clamav
-```
- 4. Set up Freshclam:
-```zsh
-sudo vi /opt/local/etc/freshclam.conf
-```
-```conf
-# Comment out:
-# Example
-
-# Uncomment
-UpdateLogFile /opt/local/var/log/clamav/freshclam.log
-NotifyClamd /opt/local/etc/clamd.conf
-DatabaseDirectory /opt/local/share/clamav
-DatabaseOwner root
-```
-```zsh
-sudo touch /opt/local/var/log/clamav/freshclam.log
-sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
-sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
-```
- 5. Set up Clamd:
-```zsh
-sudo vi /opt/local/etc/clamd.conf
-```
-```conf
-# Comment out:
-# Example
-
-# Uncomment
-LocalSocket /opt/local/var/run/clamav/clamd.socket
-PidFile /opt/local/var/run/clamav/clamd.pid
-Foreground yes
-LogFile /opt/local/var/log/clamav/clamd.log
-DatabaseDirectory /opt/local/share/clamav
-LogVerbose yes
-LogRotate yes
-LogFileMaxSize 10M
-
-# Add to end (exclusions for performance)
-ExcludePath ^/Users/warren/\.git/
-ExcludePath ^/Users/warren/node_modules/
-ExcludePath ^/Users/warren/Library/Caches/
-ExcludePath ^/Users/warren/\.Trash/
-ExcludePath ^/Users/warren/Library/Application Support/Knowledge/
-ExcludePath ^/Users/warren/Library/Application Support/com\.apple\.TCC/
-ExcludePath ^/Users/warren/Library/Application Support/AddressBook/
-ExcludePath ^/Users/warren/Library/Application Support/FaceTime/
-ExcludePath ^/Users/warren/Library/Application Support/CallHistoryDB/
-ExcludePath ^/Users/warren/Library/Autosave Information/
-ExcludePath ^/Users/warren/\.viminfo$
-ExcludePath ^/Users/warren/\.bnnsir$
-ExcludePath ^/Users/warren/Library/Group Containers/
-ExcludePath ^/Users/warren/Library/Daemon Containers/
-ExcludePath ^/Users/warren/Library/Biome/
-ExcludePath ^/private/var/folders/
-ExcludePath ^/System/
-```
- 6. Wrap `clamd` inside an application to give it FDA access (macOS Tahoe 26+):
-```zsh
-sudo mkdir -p /Applications/ClamAVDaemon.app/Contents/MacOS
-
-sudo tee /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon << 'EOF'
-#!/bin/bash
-exec /opt/local/sbin/clamd "$@"
-EOF
-
-sudo chmod +x /Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon
-
-sudo tee /Applications/ClamAVDaemon.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamAVDaemon</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamav-daemon</string>
-    <key>CFBundleName</key>
-    <string>ClamAVDaemon</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-
-sudo codesign --force --sign - /Applications/ClamAVDaemon.app
-```
- 7. Wrap `clamdscan` (the client) inside an application to give it FDA access (required for scanning files as unprivileged user):
-```zsh
-sudo mkdir -p /Applications/ClamdScan.app/Contents/MacOS
-
-sudo tee /Applications/ClamdScan.app/Contents/MacOS/ClamdScan << 'EOF'
-#!/bin/bash
-exec /opt/local/bin/clamdscan --fdpass "$@"
-EOF
-
-sudo chmod +x /Applications/ClamdScan.app/Contents/MacOS/ClamdScan
-
-sudo tee /Applications/ClamdScan.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamdScan</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamdscan</string>
-    <key>CFBundleName</key>
-    <string>ClamdScan</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-
-sudo codesign --force --sign - /Applications/ClamdScan.app
-```
- 8. Create `clamd` LaunchDaemon:
-```zsh
-sudo vi /Library/LaunchDaemons/com.personal.clamd.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.clamd</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/ClamAVDaemon.app/Contents/MacOS/ClamAVDaemon</string>
-    </array>
-    <key>KeepAlive</key>
-    <true/>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/opt/local/var/log/clamav/clamd-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/opt/local/var/log/clamav/clamd-stderr.log</string>
-</dict>
-</plist>
-```
- 9. Wrap `freshclam` inside an application (for consistency, though FDA is not strictly required):
-```zsh
-sudo mkdir -p /Applications/FreshclamDaemon.app/Contents/MacOS
-
-sudo tee /Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon << 'EOF'
-#!/bin/bash
-exec /opt/local/bin/freshclam "$@"
-EOF
-
-sudo chmod +x /Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon
-
-sudo tee /Applications/FreshclamDaemon.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>FreshclamDaemon</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.freshclam-daemon</string>
-    <key>CFBundleName</key>
-    <string>FreshclamDaemon</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-
-sudo codesign --force --sign - /Applications/FreshclamDaemon.app
-```
- 10. Create Freshclam LaunchDaemon (for automatic database updates):
-```zsh
-sudo vi /Library/LaunchDaemons/com.personal.freshclam.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.freshclam</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/FreshclamDaemon.app/Contents/MacOS/FreshclamDaemon</string>
-    </array>
-    <key>StartInterval</key>
-    <integer>3600</integer>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/opt/local/var/log/clamav/freshclam-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/opt/local/var/log/clamav/freshclam-stderr.log</string>
-</dict>
-</plist>
-```
- 11. Add the following apps to FDA (**Settings > Privacy & Security > Full Disk Access**):
-   - `/Applications/ClamAVDaemon.app`
-   - `/Applications/ClamdScan.app`
-   - `/Applications/FreshclamDaemon.app`
- 12. Run this sequence to start Clamd fresh and ensure that `freshclam` notifies `clamd` daemon:
-```zsh
-sudo rm -f /opt/local/var/log/clamav/freshclam.log.lock
-sudo rm -f /opt/local/var/run/clamav/freshclam.pid
-
-# This should be empty
-lsof | grep freshclam.log
-
-sudo rm /opt/local/var/log/clamav/freshclam.log
-sudo touch /opt/local/var/log/clamav/freshclam.log
-sudo chown root:wheel /opt/local/var/log/clamav/freshclam.log
-sudo chmod 644 /opt/local/var/log/clamav/freshclam.log
-
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-
-# Important: run as sudo
-sudo freshclam
-# Clamd successfully notified about the update.
-
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
-```
- 13. **Checkpoint** - Verify base installation:
-```zsh
-# Check daemons are running, wait for freshclam to finish first
-sleep 5
-sudo launchctl list | grep com.personal
-# 1234	0	com.personal.clamd
-# -	0	com.personal.freshclam
-
-# Check socket exists
-ls -la /opt/local/var/run/clamav/clamd.socket
-# srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
-```
-```zsh
-# Switch back to Warren
-su - warren
-
-# Add MacPorts to PATH (one-time setup)
-echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
-echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zprofile
-echo 'alias clamdscan="/Applications/ClamdScan.app/Contents/MacOS/ClamdScan"' >> ~/.zshrc
-source ~/.zshrc
-
-# Check ClamAV version and database (use wrapped clamdscan)
-/Applications/ClamdScan.app/Contents/MacOS/ClamdScan --version
-# ClamAV 1.5.1/27863/Sun Dec 28 15:26:03 2025
-
-# Test scan with EICAR (use wrapped clamdscan for FDA access)
-cd ~/Downloads
-curl -L -o eicar-test.txt https://secure.eicar.org/eicar.com.txt
-/Applications/ClamdScan.app/Contents/MacOS/ClamdScan -i eicar-test.txt
-# eicar-test.txt: Eicar-Test-Signature FOUND
-rm -f eicar-test.txt
-```
-
-**Note** EICAR is a dummy file that only contains a signature that should notify an antivirus. It does not contain anything malicious.
-
-**Note** macOS may show background app notifications from "Joshua Root" when ClamAV services run. This is normal - Joshua Root is the MacPorts developer who signs the packages.
-
-### Part 2: Daily Scan Setup
-
-> Run Part 2 commands as admin (`su - admin` if currently in warren).
-
- 1. Create root-owned directories for logs and quarantine:
-```zsh
-sudo mkdir -p /var/root/clamav-logs
-sudo chown root:wheel /var/root/clamav-logs
-sudo chmod 700 /var/root/clamav-logs
-
-sudo mkdir -p /var/root/quarantine
-sudo chown root:wheel /var/root/quarantine
-sudo chmod 700 /var/root/quarantine
-```
- 2. Wrap `clamscan` inside an application to give it FDA access (required for file scanning):
-```zsh
-sudo mkdir -p /Applications/ClamScan.app/Contents/MacOS
-
-sudo tee /Applications/ClamScan.app/Contents/MacOS/ClamScan << 'EOF'
-#!/bin/bash
-exec /opt/local/bin/clamscan "$@"
-EOF
-
-sudo chmod +x /Applications/ClamScan.app/Contents/MacOS/ClamScan
-
-sudo tee /Applications/ClamScan.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamScan</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamscan</string>
-    <key>CFBundleName</key>
-    <string>ClamScan</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-
-sudo codesign --force --sign - /Applications/ClamScan.app
-```
- 3. Add `/Applications/ClamScan.app` to FDA (**Settings > Privacy & Security > Full Disk Access**).
- 4. **Verify** `ClamScan.app` works before proceeding:
-```zsh
-# Create test file
-sudo curl -L -o /Users/warren/Downloads/eicar-test.txt https://secure.eicar.org/eicar.com.txt
-sudo chown warren:staff /Users/warren/Downloads/eicar-test.txt
-
-# Verify file content is correct
-cat /Users/warren/Downloads/eicar-test.txt
-# Should show: X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
-
-# Test ClamScan.app directly
-sudo /Applications/ClamScan.app/Contents/MacOS/ClamScan /Users/warren/Downloads/eicar-test.txt
-# Expected: /Users/warren/Downloads/eicar-test.txt: Eicar-Test-Signature FOUND
-
-# If NOT found, ClamScan.app is missing FDA - re-add it and try again
-rm -f /Users/warren/Downloads/eicar-test.txt
-```
- 5. Create the daily scan script (in this [repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-scan.sh)):
-```zsh
-sudo mkdir -p /usr/local/bin 
-sudo vi /usr/local/bin/clamav-scan.sh
-```
-```zsh
-sudo chmod +x /usr/local/bin/clamav-scan.sh
-```
- 6. Create the ClamAVScan.app wrapper that calls the scan script:
-```zsh
-sudo mkdir -p /Applications/ClamAVScan.app/Contents/MacOS
-
-sudo tee /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan << 'EOF'
-#!/bin/bash
-/usr/local/bin/clamav-scan.sh /Users/warren
-EOF
-
-sudo chmod +x /Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan
-
-sudo tee /Applications/ClamAVScan.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>ClamAVScan</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.personal.clamav-scan</string>
-    <key>CFBundleName</key>
-    <string>ClamAVScan</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-
-# Code sign the app
-sudo codesign --force --sign - /Applications/ClamAVScan.app
-```
- 7. Create LaunchDaemon for daily scans (runs at 4am as root):
-```zsh
-sudo vi /Library/LaunchDaemons/com.personal.clamscan.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.clamscan</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/ClamAVScan.app/Contents/MacOS/ClamAVScan</string>
-    </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>4</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>/var/root/clamav-logs/clamscan-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/var/root/clamav-logs/clamscan-stderr.log</string>
-</dict>
-</plist>
-```
-```zsh
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-```
- 8. **Checkpoint** - Verify daily scan setup (run as admin):
-```zsh
-# Re-verify daemons from Part 1
-sudo launchctl list | grep com.personal
-# 1234	0	com.personal.clamd
-# -	0	com.personal.freshclam
-# -	0	com.personal.clamscan -- there is no PID because it only runs periodically
-
-# Create test file in warren's Downloads
-sudo curl -L -o /Users/warren/Downloads/eicar-daily-test.txt https://secure.eicar.org/eicar.com.txt
-sudo chown warren:staff /Users/warren/Downloads/eicar-daily-test.txt
-
-# Test daily scan manually (scans /Users/warren by default)
-sudo /usr/local/bin/clamav-scan.sh
-# Expected: 
-#  - "1 infected file(s) found" message
-#  - file moved to /var/root/quarantine/
-#  - dialog notification appears
-#  - email NOT sent yet (email setup is next)
-# Note: Some "errors" are normal (macOS protected files that can't be scanned)
-
-# Check log was created
-sudo tail -20 /var/root/clamav-logs/scan-$(date +%F).log
-# ----------- SCAN SUMMARY -----------
-# Infected files: 1
-# ...
-
-# Check quarantine
-sudo ls /var/root/quarantine/
-# eicar-daily-test.txt
-
-# Clean up quarantine for next tests
-sudo rm -rf /var/root/quarantine/*
-```
-
-### Part 3: Email Notifications
-> Skip this section if you don't want email alerts. The scan scripts will work fine without email - alerts simply won't be sent.
-
- 1. To generate a Gmail App Password:
-   - Go to https://myaccount.google.com/security
-   - Enable 2-Step Verification if not already enabled
-   - Search for "App passwords"
-   - Generate a new app password for "Mail"
-   - Use that 16-character password in the file above
- 2. Create SASL password file:
-```zsh
-sudo vi /etc/postfix/sasl_passwd
-
-# Add (replace with your email and app password):
-[smtp.gmail.com]:587 yjwarrenwang@gmail.com:YOUR_APP_PASSWORD_HERE
-```
- 3. Configure postfix and click "Allow" for prompted notification:
-```zsh
-sudo vi /etc/postfix/main.cf
-
-# Add these lines at the end:
-relayhost = [smtp.gmail.com]:587
-smtp_sasl_auth_enable = yes
-smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
-smtp_sasl_security_options = noanonymous
-smtp_sasl_mechanism_filter = plain
-smtp_use_tls = yes
-smtp_tls_security_level = encrypt
-smtp_tls_CAfile = /etc/ssl/cert.pem
-smtp_address_preference = ipv4
-```
- 4. Secure and hash password file:
-```zsh
-sudo chmod 600 /etc/postfix/sasl_passwd
-sudo postmap /etc/postfix/sasl_passwd
-```
- 5. Start postfix:
-```zsh
-sudo postfix start
-sudo postfix reload
-```
- 6. **Checkpoint** - Verify email AND re-verify Parts 1-2:
-```zsh
-# test email directly
-echo "Test email from ClamAV setup" | mail -s "ClamAV Test" yjwarrenwang@gmail.com
-sleep 5
-mailq
-# Mail queue is empty
-# check inbox for the test email, might need a minute
-
-# Re-verify all daemons
-sudo launchctl list | grep com.personal
-# 1234	0	com.personal.clamd
-# -	0	com.personal.freshclam
-# -	0	com.personal.clamscan
-
-# Full integration test with email
-curl -L -o ~/Downloads/eicar-email-test.txt https://secure.eicar.org/eicar.com.txt
-sudo /usr/local/bin/clamav-scan.sh /Users/warren/Downloads
-# Expected:
-#   - scan completes
-#   - dialog notification appears
-#   - email IS sent this time (check inbox)
-#   - log shows "Email sent successfully"
-
-sudo tail -10 /var/root/clamav-logs/scan-$(date +%F).log
-# "Email sent successfully" somewhere
-sudo rm -rf /var/root/quarantine/*
-```
-
-### Part 4: On-Access Scanning
-> There is no official on-access scanning on macOS (only Linux via `fanotify`). This uses `fswatch` as a workaround for real-time file monitoring.
-
- 1. Install `fswatch`:
-```zsh
-sudo port install fswatch
-```
- 2. Create user-level directories for on-access logs and quarantine:
-```zsh
-mkdir -p /Users/warren/clamav-logs
-mkdir -p /Users/warren/quarantine
-```
- 3. Create the on-access scan script (also in [this repo](https://github.com/crimsonpython24/macos-setup/blob/master/clamav-onaccess.sh)):
-```zsh
-sudo vi /usr/local/bin/clamav-onaccess.sh
-# ...
-```
-```zsh
-sudo chmod +x /usr/local/bin/clamav-onaccess.sh
-```
- 4. Create LaunchAgent (runs as user, not system, so do not give sudo):
-```zsh
-mkdir -p ~/Library/LaunchAgents
-vi ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-```
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.personal.clamav-onaccess</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/clamav-onaccess.sh</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/clamav-onaccess-stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/clamav-onaccess-stderr.log</string>
-</dict>
-</plist>
-```
- 5. Load the LaunchAgent:
-```zsh
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-```
- 6. **Checkpoint** - Full system verification (verifies everything):
-```zsh
-# Verify all daemons
-sudo launchctl list | grep com.personal
-# 1234	0	com.personal.clamd
-# -	0	com.personal.freshclam
-# -	0	com.personal.clamscan
-
-launchctl list | grep clamav-onaccess
-# 1825	0	com.personal.clamav-onaccess
-
-ps aux | grep fswatch | grep -v grep
-# /opt/local/bin/fswatch -0 -r -l 2...
-
-# Verify clamd socket
-ls -la /opt/local/var/run/clamav/clamd.socket
-# srw-rw-rw-  1 root  wheel  0 Dec 28 17:45 /opt/local/var/run/clamav/clamd.socket
-
-# Test on-access scanning
-# Terminal 1:
-tail -f ~/clamav-logs/onaccess-$(date +%F).log
-
-# Terminal 2:
-cd ~/Downloads
-curl -L -o eicar-onaccess-test.txt https://secure.eicar.org/eicar.com.txt
-# Expected in Terminal 1:
-#   - "Scanning: .../eicar-onaccess-test.txt"
-#   - "INFECTED: ..."
-#   - "Alerts spawned"
-# Expected on screen:
-#   - notification appears
-#   - dialog "ClamAV On-Access Alert"
-#   - email received
-
-# Test small file (should not alert, <50B unlikely to be virus)
-echo "normal content" > ~/Downloads/clean-test.txt
-# Expected in log: "Clean"
-
-# Test clean file (should not alert)
-echo "longer content that should be larger than 50 bytes" > ~/Downloads/clean-test2.txt
-# Expected in log: "Clean"
-
-# Verify email
-mailq
-# "Mail queue is empty"
-
-# Check all logs exist
-ls -la ~/clamav-logs/
-# Expected: onaccess-YYYY-MM-DD.log
-sudo ls -la /var/root/clamav-logs/
-# Expected: scan-YYYY-MM-DD.log
-```
-
-### Cleanup: Remove Default MacPorts Services
-
-Remove MacPorts' default symlinks to avoid conflicts:
-```zsh
-sudo rm -f /Library/LaunchDaemons/org.macports.freshclam.plist
-sudo rm -f /Library/LaunchDaemons/org.macports.clamd.plist
-sudo rm -f /Library/LaunchDaemons/org.macports.ClamavScanOnAccess.plist
-sudo rm -f /Library/LaunchDaemons/org.macports.ClamavScanSchedule.plist
-
-# Verify none are loaded
-sudo launchctl list | grep org.macports
-# Should be empty
-```
-
-### Ref: Restart Commands
-If something is not working, restart the relevant service:
-```zsh
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamd.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamd.plist
-
-sudo launchctl unload /Library/LaunchDaemons/com.personal.freshclam.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.freshclam.plist
-
-sudo launchctl unload /Library/LaunchDaemons/com.personal.clamscan.plist
-sudo launchctl load /Library/LaunchDaemons/com.personal.clamscan.plist
-
-launchctl unload ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-launchctl load ~/Library/LaunchAgents/com.personal.clamav-onaccess.plist
-
-sudo launchctl start com.personal.clamscan
-```
-
-### Ref: Log Locations
-```zsh
-# Daily scan (root-owned)
-sudo cat /var/root/clamav-logs/scan-$(date +%F).log
-
-# On-access (user-owned)
-cat ~/clamav-logs/onaccess-$(date +%F).log
-
-# ClamAV daemon (root-owned)
-sudo cat /opt/local/var/log/clamav/clamd.log
-
-# Freshclam (root-owned)
-sudo cat /opt/local/var/log/clamav/freshclam.log
-```
-
-<sup>https://paulrbts.github.io/blog/software/2017/08/18/clamav/</sup><br/>
-<sup>https://blog.csdn.net/qq_60735796/article/details/156052196</sup>
-
-## 3. Santa Setup
- 1. Install the updated release from Northpole on [GitHub](https://northpole.dev/deployment/install-package/#releases)
- 2. Grant permissions:
-    - "Login Items & Extensions" > "App Background Activity" add Santa.app
-    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" add Santa daemon
-    - "Login Items & Extensions" > "Extensions" > "By App" > should show "Santa" after restarting Settings
-    - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
- 3. Check if Santa is running:
-```zsh
-sudo santactl doctor
-```
- 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). If the NIST configuration profile blocks installation, remove that profile first, install this Santa profile, and then add the original MDM back.
-```zsh
-vi santa.mobileconfig
-# ...
-sudo open santa.mobileconfig
-```
- 5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
-```zsh
-santactl fileinfo /System/Applications/Dictionary.app 
-Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
-SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
-Bundle Name            : Dictionary
-Bundle Version         : 294
-Bundle Version Str     : 2.3.0
-Signing ID             : platform:com.apple.Dictionary
-
-# Better approach: use signing ID (will not change even with app update)
-sudo santactl rule \
-  --block \
-  --signingid \
-  --identifier platform:com.apple.Dictionary
-```
-```zsh
-sudo santactl rule --block --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
-# Added rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-
-sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-# Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f.
-```
- 6. When importing/exporting rules, use:
-```zsh
-sudo santactl rule --export santa1.json
-```
-
-## 4. DNS Stuffs
 ### A) Hosts File
  - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`; this step can also be done in Little Snitch.
 ```zsh
@@ -873,9 +43,11 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 > Some VPN applications override DNS settings on connect; may need to reconfigure VPN after setting up a local DNS server (change DNS to 127.0.0.1).
 > No need to configure DNSSEC in this step; it will be handled with Unbound.
 
- 1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`. Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
- 2. Because there will be no connection until section 3(C) is configured, first install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
- 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path (e.g., `/opt/local/share/dnscrypt-proxy/example.toml`).
+ 1. Install xcode command-line tools and MacPorts in the admin user.
+ 2. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
+    - Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
+    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
+ 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path.
  4. Edit the file and change listening ports:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
@@ -979,44 +151,50 @@ routes = [
 skip_incompatible = true
 direct_cert_fallback = false
 ```
+ 5. Edit the property list to give DNSCrypt startup access:
 ```zsh
 sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dnscrypt-proxy.plist
-sudo launchctl enable system/org.macports.dnscrypt-proxy
-
-<?xml version='1.0' encoding='UTF-8'?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-"http://www.apple.com/DTDs/PropertyList-1.0.dtd" >
-<plist version='1.0'>
-<dict>
-<key>Label</key><string>org.macports.dnscrypt-proxy</string>
-<key>ProgramArguments</key>
-<array>
-        <string>/opt/local/bin/daemondo</string>
-        <string>--label=dnscrypt-proxy</string>
-        <string>--start-cmd</string>
-        <string>/opt/local/sbin/dnscrypt-proxy</string>
-        <string>-config</string>
-        <string>/opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml</string>
-        <string>;</string>
-        <string>--restart-netchange</string>
-        <string>--pid=exec</string>
-</array>
-<key>Disabled</key><false/>
-<key>KeepAlive</key><true/>
-<key>RunAtLoad</key><true/>
-</dict>
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>org.macports.dnscrypt-proxy</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/opt/local/bin/daemondo</string>
+      <string>--label=dnscrypt-proxy</string>
+      <string>--start-cmd</string>
+      <string>/opt/local/sbin/dnscrypt-proxy</string>
+      <string>-config</string>
+      <string>/opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml</string>
+      <string>;</string>
+      <string>--restart-netchange</string>
+      <string>--pid=exec</string>
+    </array>
+    <key>Disabled</key>
+    <false />
+    <key>KeepAlive</key>
+    <true />
+    <key>RunAtLoad</key>
+    <true />
+  </dict>
 </plist>
 ```
+ 6. Load the proxy:
 ```zsh
+sudo launchctl enable system/org.macports.dnscrypt-proxy
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
- 4. Check if current configuration is valid (will not run otherwise):
+ 7. Check if current configuration is valid (will not run otherwise):
 ```zsh
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -check
 # Remember to reload dnscrypt-proxy after toml change
 
-# Run in foreground with verbose logging
+# If debug: run in foreground with verbose logging
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -loglevel 0
 ```
 ```zsh
@@ -1024,7 +202,7 @@ sudo lsof +c 15 -Pni UDP:54
 # dnscrypt-proxy 57409 root    7u  IPv4 0xf2ce17b711151ccc      0t0  UDP 127.0.0.1:54
 # dnscrypt-proxy 57409 root    9u  IPv6 0x8031285518513383      0t0  UDP [::1]:54
 ```
- 5. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
+ 7. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
 ```zsh
 # Sometimes system will not respect GUI settings
 sudo networksetup -setdnsservers "Wi-Fi" 127.0.0.1
@@ -1038,17 +216,17 @@ scutil --dns | head -10
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
 ```
- 6. Again, since this guide routes `dnscrypt-proxy` to port 54, there still will not be Internet connection until after section 4(C)
+ 8. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 1(C)
+
+**Note** dnscrypt-proxy will take a few seconds to load on startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
-> The original guide uses `dnsmasq`; however, Dnsmasq will not reload `ad` (authenticated data) in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
+> The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
- 1. Unbound should already be installed in 4(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
+ 1. Unbound should already be installed in 1(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
  2. Create directories and configurations.
 ```zsh
-sudo mkdir -p /opt/local/etc/unbound
-port contents unbound | grep unbound.conf
-sudo vi /opt/local/etc/unbound/unbound.conf
+vi /opt/local/etc/unbound/unbound.conf
 ```
 ```conf
 # /opt/local/etc/unbound/unbound.conf
@@ -1334,9 +512,148 @@ curl -I https://google.com
 dig @127.0.0.1 dnsleaktest.com
 dig @9.9.9.9 dnsleaktest.com
 ```
+
 One might have to quit and restart Safari (while testing) with `killall Safari`.
 
 <sup>https://wiki.archlinux.org/title/Dnscrypt-proxy#Startup</sup></br>
 <sup>https://00f.net/2019/11/03/stop-using-low-dns-ttls/</sup></br>
 <sup>https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html</sup>
 <sup>https://wiki.archlinux.org/title/Unbound</sup>
+
+## 2. Santa Setup
+ 1. Install the updated release from Northpole on [GitHub](https://northpole.dev/deployment/install-package/#releases)
+ 2. Grant permissions:
+    - "Login Items & Extensions" > "App Background Activity" add Santa.app
+    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" add Santa daemon
+    - "Login Items & Extensions" > "Extensions" > "By App" > should show "Santa" after restarting Settings
+    - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
+ 3. Check if Santa is running:
+```zsh
+sudo santactl doctor
+```
+ 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because the NIST configurations block adding new profiles.
+```zsh
+vi santa.mobileconfig
+# Edit file
+sudo open santa.mobileconfig
+```
+ 5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
+```zsh
+santactl fileinfo /System/Applications/Dictionary.app 
+Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
+SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
+Bundle Name            : Dictionary
+Bundle Version         : 294
+Bundle Version Str     : 2.3.0
+Signing ID             : platform:com.apple.Dictionary
+
+# Better approach: use signing ID (will not change even with app update)
+sudo santactl rule \
+  --block \
+  --signingid \
+  --identifier platform:com.apple.Dictionary
+```
+```zsh
+sudo santactl rule --block --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
+# Added rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+
+sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+# Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f.
+```
+ 6. When importing/exporting rules, use:
+```zsh
+sudo santactl rule --export santa1.json
+```
+
+## 3. mSCP Setup
+Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
+
+ > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
+
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
+```zsh
+cd build
+mkdir baselines && cd baselines
+sudo vi cnssi-1253_cust.yaml
+```
+ 2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
+ 3. Install dependencies, recommended within a virtual environment.
+```zsh
+sudo port install python314
+sudo port select --set python python314
+sudo port select --set python3 python314
+```
+```zsh
+cd ~/Desktop/Profiles/macos_security-tahoe
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install --upgrade pip
+pip3 install pyyaml xlwt
+```
+ 4. Optional: load custom ODVs (organization-defined values)
+```zsh
+cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
+odv:
+  custom: 12
+EOF
+
+cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
+odv:
+  custom: 5
+EOF
+
+cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
+odv:
+  custom: 0
+EOF
+```
+ 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
+```zsh
+python3 scripts/generate_guidance.py \
+        -P \
+        -s \
+        -p \
+    build/baselines/cnssi-1253_cust.yaml
+```
+ 6. If there is a previous profile installed, remove it in Settings first. Run the compliance script.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%. Exit the tool.
+ 8. Install the configuration profile (one might have to open the Settings app to install the profile):
+```zsh
+cd build/cnssi-1253_cust/mobileconfigs/unsigned
+sudo open cnssi-1253_cust.mobileconfig
+```
+ 9. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 10. Exit (if not already) and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There will be a handful of them.
+ 12. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 13. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+```zsh
+os_firewall_default_deny_require
+system_settings_filevault_enforce
+```
+ 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
+```zsh
+ls includes/enablePF-mscp.sh
+sudo bash includes/enablePF-mscp.sh
+
+sudo pfctl -a '*' -sr | grep "block drop in all"
+# Should output smt like "block drop in all" i.e. default deny all incoming
+sudo pfctl -s info
+# Should be running
+
+# FileVault
+sudo fdesetup status
+```
+ 15. Note from previous step: one might encounter these two warnings
+   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
+   - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
+ 16. The script should yield 100% compliance by running option 2, then option 1. Restart the device.
+
+**Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
