@@ -980,6 +980,34 @@ skip_incompatible = true
 direct_cert_fallback = false
 ```
 ```zsh
+sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dnscrypt-proxy.plist
+sudo launchctl enable system/org.macports.dnscrypt-proxy
+
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd" >
+<plist version='1.0'>
+<dict>
+<key>Label</key><string>org.macports.dnscrypt-proxy</string>
+<key>ProgramArguments</key>
+<array>
+        <string>/opt/local/bin/daemondo</string>
+        <string>--label=dnscrypt-proxy</string>
+        <string>--start-cmd</string>
+        <string>/opt/local/sbin/dnscrypt-proxy</string>
+        <string>-config</string>
+        <string>/opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml</string>
+        <string>;</string>
+        <string>--restart-netchange</string>
+        <string>--pid=exec</string>
+</array>
+<key>Disabled</key><false/>
+<key>KeepAlive</key><true/>
+<key>RunAtLoad</key><true/>
+</dict>
+</plist>
+```
+```zsh
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
