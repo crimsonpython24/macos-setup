@@ -24,14 +24,21 @@
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
 
 ### Note
-This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party surveillance. 
+This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party or three-letter-agencies surveillance. 
 
 <sup>https://taoofmac.com/space/howto/switch#best-practices</sup><br/>
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. DNS Setup
- > For the following sections, all dependencies (Git, Python3...) can be installed via MacPorts. Install XCode/MacPorts in admin and not in Warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
+ > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in admin and not warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
+
+ 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. Everything in this tutorital can be done in either user's GUI session (personally prefer to log in as warren and `su - admin` whenever necessary).
+ 2. Add MacPorts to warren's shells:
+```zsh
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
+```
 
 ### A) Hosts File
  - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`; this step can also be done in Little Snitch.
@@ -40,15 +47,15 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 ```
 
 ### B) DNSCrypt
-> Some VPN applications override DNS settings on connect; may need to reconfigure VPN after setting up a local DNS server (change DNS to 127.0.0.1).
+> Some VPN applications override DNS settings on connect; may need to reconfigure VPN and make it use the local DNS server (change DNS to 127.0.0.1).
 > No need to configure DNSSEC in this step; it will be handled with Unbound.
 
- 1. Install xcode command-line tools and MacPorts in the admin user.
+ 1. Again, first install xcode command line tools and MacPorts in the admin user. Note: all `sudo` commands must be run inside admin, i.e. `su - admin`.
  2. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
     - Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
     - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
- 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get the configuration path.
- 4. Edit the file and change listening ports:
+ 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
+ 4. Edit the file and replace the following settings:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 ```
@@ -224,220 +231,10 @@ sudo killall -HUP mDNSResponder
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
  1. Unbound should already be installed in 1(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Create directories and configurations.
+ 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] into Unbound:
 ```zsh
 vi /opt/local/etc/unbound/unbound.conf
-```
-```conf
-# /opt/local/etc/unbound/unbound.conf
-
-server:
-    # listener config
-    interface: 127.0.0.1
-    interface: ::1
-    port: 53
-    do-ip4: yes
-    do-ip6: yes
-    do-udp: yes
-    do-tcp: yes
-    
-    # bind to specific interfaces only
-    interface-automatic: no
-    
-    # access control
-    access-control: 127.0.0.0/8 allow
-    access-control: ::1 allow
-    access-control: 0.0.0.0/0 refuse
-    access-control: ::0/0 refuse
-    
-    # cache settings
-    cache-min-ttl: 2400
-    cache-max-ttl: 86400
-    cache-max-negative-ttl: 3600
-    
-    # serve expired entries while refreshing (resilience)
-    serve-expired: yes
-    serve-expired-ttl: 86400
-    serve-expired-reply-ttl: 30
-    serve-expired-client-timeout: 1800
-    
-    # cache sizes (slightly increased from original)
-    msg-cache-size: 64m
-    rrset-cache-size: 128m
-    neg-cache-size: 16m
-    
-    # DNSSEC
-    module-config: "validator iterator"
-    auto-trust-anchor-file: "/opt/local/etc/unbound/root.key"
-    val-clean-additional: yes
-    val-permissive-mode: no
-    val-log-level: 1
-    
-    # trust anchor signaling (RFC 8145)
-    trust-anchor-signaling: yes
-    
-    # root key sentinel (detects root key rollovers)
-    root-key-sentinel: yes
-    
-    # dns rebinding protection
-    private-address: 10.0.0.0/8
-    private-address: 172.16.0.0/12
-    private-address: 192.168.0.0/16
-    private-address: 169.254.0.0/16
-    private-address: fd00::/8
-    private-address: fe80::/10
-    private-address: 127.0.0.0/8
-    private-address: ::1/128
-
-    # block IPv4-mapped IPv6 addresses (bypass prevention)
-    private-address: ::ffff:0:0/96
-    
-    # allow localhost queries (rebind-localhost-ok equivalent)
-    private-domain: "localhost."
-    private-domain: "127.in-addr.arpa."
-    
-    # DNSSEC hardening
-    harden-algo-downgrade: yes
-    harden-below-nxdomain: yes
-    harden-dnssec-stripped: yes
-    harden-glue: yes
-    harden-large-queries: yes
-    harden-referral-path: no  # Changed: experimental, can cause performance issues
-    harden-short-bufsize: yes
-    harden-unknown-additional: yes  # NEW: reject unknown record types in additional section
-    
-    # 0x20-encoded random bits to foil spoof attempts
-    use-caps-for-id: yes
-    
-    # deny queries of type ANY (reduces amplification attacks)
-    deny-any: yes
-    
-    # unwanted reply threshold: defend against cache poisoning
-    # clears cache if threshold reached (10 million suggested by manpage)
-    unwanted-reply-threshold: 10000000
-    
-    # EDNS buffer size (DNS Flag Day 2020)
-    edns-buffer-size: 1232
-    max-udp-size: 1232
-    
-    # outbound port range w/ source port randomization
-    outgoing-port-permit: 1024-65535
-    outgoing-port-avoid: 0-1023
-    
-    # do not query localhost
-    do-not-query-localhost: no
-    
-    # privacy features
-    qname-minimisation: yes
-    qname-minimisation-strict: no
-    aggressive-nsec: yes
-    hide-identity: yes
-    hide-version: yes
-    hide-trustanchor: yes 
-    identity: "DNS"  
-    minimal-responses: yes
-    
-    # performance?
-    num-threads: 2
-    
-    # slabs should be power of 2 close to num-threads
-    msg-cache-slabs: 4
-    rrset-cache-slabs: 4
-    infra-cache-slabs: 4
-    key-cache-slabs: 4
-    
-    # socket options (increase send/recv buffer)
-    so-reuseport: yes
-    so-rcvbuf: 4m  
-    so-sndbuf: 4m  
-    
-    # prefetch popular items before they expire
-    prefetch: yes
-    prefetch-key: yes
-    
-    # rotate RRset order in responses (load balancing)
-    rrset-roundrobin: yes
-    
-    # number of queries per thread
-    num-queries-per-thread: 4096
-    outgoing-range: 8192
-    
-    # TCP connection handling
-    incoming-num-tcp: 100
-    outgoing-num-tcp: 100
-    
-    # extra delay for timeouted udp ports (prevents port counter issues)
-    delay-close: 10000
-    
-    # infra-cache settings
-    infra-cache-numhosts: 10000
-    infra-keep-probing: yes  # NEW: keep probing hosts that are down
-    
-    # local zones for tld blocking
-    local-zone: "local." static
-    local-zone: "localhost." static
-    local-zone: "home." static
-    local-zone: "lan." static
-    local-zone: "internal." static
-    local-zone: "corp." static
-    local-zone: "private." static
-    local-zone: "test." static
-    local-zone: "invalid." static
-    
-    # additional rfc recommended zones
-    local-zone: "onion." static
-    local-zone: "home.arpa." static
-    
-    # bogus private reverse lookups (bogus-priv equivalent)
-    local-zone: "10.in-addr.arpa." static
-    local-zone: "16.172.in-addr.arpa." static
-    local-zone: "17.172.in-addr.arpa." static
-    local-zone: "18.172.in-addr.arpa." static
-    local-zone: "19.172.in-addr.arpa." static
-    local-zone: "20.172.in-addr.arpa." static
-    local-zone: "21.172.in-addr.arpa." static
-    local-zone: "22.172.in-addr.arpa." static
-    local-zone: "23.172.in-addr.arpa." static
-    local-zone: "24.172.in-addr.arpa." static
-    local-zone: "25.172.in-addr.arpa." static
-    local-zone: "26.172.in-addr.arpa." static
-    local-zone: "27.172.in-addr.arpa." static
-    local-zone: "28.172.in-addr.arpa." static
-    local-zone: "29.172.in-addr.arpa." static
-    local-zone: "30.172.in-addr.arpa." static
-    local-zone: "31.172.in-addr.arpa." static
-    local-zone: "168.192.in-addr.arpa." static
-    
-    # additional private reverse zones
-    local-zone: "254.169.in-addr.arpa." static
-    local-zone: "d.f.ip6.arpa." static
-    local-zone: "8.e.f.ip6.arpa." static
-    local-zone: "9.e.f.ip6.arpa." static
-    local-zone: "a.e.f.ip6.arpa." static
-    local-zone: "b.e.f.ip6.arpa." static
-    
-    # logging
-    verbosity: 1
-    use-syslog: yes
-    log-queries: no
-    log-replies: no
-    log-servfail: yes  # NEW: log why queries return SERVFAIL
-    log-local-actions: no
-    
-    # dns error codes
-    ede: yes
-    ede-serve-expired: yes
-
-# forwarding zones for dnscrypt-proxy (configured upstream)
-forward-zone:
-    name: "."
-    forward-addr: 127.0.0.1@54
-    forward-addr: ::1@54
-    forward-first: no
-
-# disable remote control
-remote-control:
-    control-enable: no
+# Edit file
 ```
  3. Initialize root trust anchor for DNSSEC.
 ```zsh
@@ -531,7 +328,7 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 ```zsh
 sudo santactl doctor
 ```
- 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because the NIST configurations block adding new profiles.
+ 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because NIST configurations block adding new profiles.
 ```zsh
 vi santa.mobileconfig
 # Edit file
@@ -585,6 +382,7 @@ sudo port select --set python python314
 sudo port select --set python3 python314
 ```
 ```zsh
+su - warren
 cd ~/Desktop/Profiles/macos_security-tahoe
 python3 -m venv venv
 source venv/bin/activate
@@ -651,9 +449,13 @@ sudo pfctl -s info
 # FileVault
 sudo fdesetup status
 ```
- 15. Note from previous step: one might encounter these two warnings
-   - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
-   - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
+ 15. Note from previous step: one might encounter these two warnings.
+    - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
+    - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
  16. The script should yield 100% compliance by running option 2, then option 1. Restart the device.
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
+
+## Footnotes
+
+Reboot and everything should work, even by directly logging into `warren` and not `admin`.
