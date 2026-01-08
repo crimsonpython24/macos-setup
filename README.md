@@ -33,9 +33,12 @@ This guide reflects the "secure, not private" concept in that, although these se
 ## 1. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in admin and not warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
 
+ > When downloading stuff with LibreWolf, fix the notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
+
  1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. Everything in this tutorital can be done in either user's GUI session (personally prefer to log in as warren and `su - admin` whenever necessary).
  2. Add MacPorts to warren's shells:
 ```zsh
+su - warren
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
 ```
@@ -53,7 +56,7 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
  1. Again, first install xcode command line tools and MacPorts in the admin user. Note: all `sudo` commands must be run inside admin, i.e. `su - admin`.
  2. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
     - Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
-    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
+    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`. Also copy Unbound's [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf) beforehand.
  3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
  4. Edit the file and replace the following settings:
 ```zsh
@@ -218,7 +221,7 @@ networksetup -getdnsservers "Wi-Fi"
 # 127.0.0.1
 
 scutil --dns | head -10
-# nameserver[1] : 127.0.0.1
+# nameserver[0] : 127.0.0.1
 
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
@@ -233,7 +236,7 @@ sudo killall -HUP mDNSResponder
  1. Unbound should already be installed in 1(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
  2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] into Unbound:
 ```zsh
-vi /opt/local/etc/unbound/unbound.conf
+sudo vi /opt/local/etc/unbound/unbound.conf
 # Edit file
 ```
  3. Initialize root trust anchor for DNSSEC.
@@ -372,7 +375,7 @@ Important: the security compliance project does **not** modify any system behavi
 ```zsh
 cd build
 mkdir baselines && cd baselines
-sudo vi cnssi-1253_cust.yaml
+vi cnssi-1253_cust.yaml
 ```
  2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
  3. Install dependencies, recommended within a virtual environment.
@@ -380,6 +383,9 @@ sudo vi cnssi-1253_cust.yaml
 sudo port install python314
 sudo port select --set python python314
 sudo port select --set python3 python314
+
+sudo port install py314-pip 
+sudo port select --set pip pip314
 ```
 ```zsh
 su - warren
