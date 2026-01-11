@@ -477,26 +477,71 @@ sudo fdesetup status
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
-## 4. Fish Shell
+## 4. Application Install
 
- 1. Install fish through the admin account:
+> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory. 
+
+ 1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
+```zsh
+sudo dseditgroup -o edit -d warren -t user admin
+```
+ 3. Force certain `/Library` folders to be inaccessible to apps in `~/Library`.
+```zsh
+sudo vi ~/Desktop/Profiles/directory_lock.sh
+```
+```zsh
+CRITICAL_DIRS=(
+    "/Library/LaunchAgents"
+    "/Library/LaunchDaemons"
+    "/Library/StartupItems"
+    "/Library/PrivilegedHelperTools"
+)
+
+for dir in "${CRITICAL_DIRS[@]}"; do
+    sudo chmod +a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" "$dir"
+done
+```
+ 3. Rollback command:
+```zsh
+sudo chmod -a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" /Library/LaunchAgents
+```
+ 4. If any applications are curl'd through Git, use GnuPG instead of gpg:
+```zsh
+sudo port install gnupg2
+which gpg
+# /opt/local/bin/gpg
+```
+
+**Note** when using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/user-overrides.js) in this repo.
+
+## 5. Fish Shell
+
+ 1. First change the hostname:
+```zsh
+sudo scutil --set ComputerName "device"
+sudo scutil --set LocalHostName "device"
+sudo scutil --set HostName "device"
+hostname # device
+```
+ 2. Install fish through the admin account:
 ```zsh
 su - admin
 sudo port install fish
 ```
- 2. Switch shells for warren only:
+ 3. Switch shells for warren only:
 ```zsh
 sudo vi /etc/shells
 # Add
 /opt/local/bin/fish
 sudo chpass -s /opt/local/bin/fish warren
 ```
- 3. Add paths to fish:
+ 4. Add paths to fish:
 ```fish
- fish_add_path /opt/local/bin
- fish_add_path /opt/local/sbin
+# su - warren
+fish_add_path /opt/local/bin
+fish_add_path /opt/local/sbin
 ```
- 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo†](https://github.com/cpy24/iterm-setup).
+ 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/Basic%201.terminal).
  5. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
     - [jethrokuan/z](https://github.com/jethrokuan/z)
     - [PatrickF1/fzf.fish](https://github.com/PatrickF1/fzf.fish) -- depends on `sudo port install fzf fd bat`
@@ -545,7 +590,7 @@ function uext
     find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
 end
 ```
- 9. Test YouTube download functionality: first download [youtube-dl nightly](https://github.com/ytdl-org/ytdl-nightly/releases), then run:
+ 9. Test YouTube download functionality: first download [youtube-dl nightly](https://github.com/ytdl-org/ytdl-nightly/releases) and `sudo port install ffmpeg`, then run:
 ```fish
 chmod +x /Users/warren/.local/bin/youtube-dl
 /Users/warren/.local/bin/youtube-dl https://www.youtube.com/watch?v=QvghQOO3K-I
@@ -553,6 +598,55 @@ gif 'Cute Pop Sound Effects-QvghQOO3K-I.mp4' vid.gif
 # Should both work; open gif in e.g. Firefox
 ```
  10. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations†](https://github.com/cpy24/iterm-setup)
+ 11. Install new configuration from [ssh-config](https://github.com/crimsonpython24/macos-setup/blob/master/ssh_config):
+```fish
+cp ssh_config ~/.ssh/config
+chmod 600 ~/.ssh/config
+```
+ 12. Create the sockets directory for multiplexing:
+```fish
+mkdir -p ~/.ssh/sockets
+chmod 700 ~/.ssh/sockets
+```
+ 13. Generate ED25519 key for GitHub:
+```fish
+ssh-keygen -t ed25519 -a 100 -f ~/.ssh/github_ed25519 -C "github-$(hostname)-$(date +%Y)"
+```
+ 14. Set permissions:
+```fish
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/config
+chmod 600 ~/.ssh/*_ed25519       # Private keys
+chmod 644 ~/.ssh/*_ed25519.pub   # Public keys
+chmod 600 ~/.ssh/known_hosts     # Will be created on first connection
+```
+ 15. Add keys to macOS keychain:
+```fish
+ssh-add --apple-use-keychain ~/.ssh/github_ed25519
+ssh-add --apple-use-keychain ~/.ssh/gitlab_ed25519
+ssh-add -l
+```
+ 16. Test SSH connection:
+```fish
+ssh -T git@github.com
+cat ~/.ssh/known_hosts
+# |1|qN7XE853AcGGBmJDT/APv+AiZGU=|qq21+AC5OMD...
+```
+
+**Note** If legacy SSH servers are not working, use the following configuration:
+```fish
+Host legacy-server
+  HostName old.server.com
+  # Allow older key exchange for this specific server
+  KexAlgorithms +diffie-hellman-group14-sha256,diffie-hellman-group14-sha1
+  # Allow older ciphers
+  Ciphers +aes128-cbc,aes256-cbc
+  # Allow older MACs
+  MACs +hmac-sha2-256,hmac-sha1
+  # Allow older host key types
+  HostKeyAlgorithms +ssh-rsa
+  PubkeyAcceptedAlgorithms +ssh-rsa
+```
 
 ## Footnotes
 
