@@ -1,4 +1,6 @@
-# macOS Setup (WIP)
+# macOS Setup
+
+Total time needed (from empty system): 14:05 - 
 
 ## 0. Basics
 ### Administrative Account ("Admin")
@@ -9,16 +11,19 @@
 
 #### App Installation Guidelines
  - Do not use the admin account besides initializing the machine
- - Do not install any apps as Admin unless necessary, as some should run just fine outside the root directory (i.e. `/Applications`)
-   - Said apps will prompt for password if they need privilege escalations regardless
+ - Do not install any apps as Admin unless necessary, as some should run just fine outside the root directory (e.g. `/Users/warren/Applications`)
+   - Said apps will prompt for password if they need privilege escalations regardless, and it is up to one to decide whether to escalate its privilege (install in `/Applications`) or find an alternative.
    - Do not move pre-/auto-installed macOS apps around in Finder, because future updates might break those modifications
- - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin
+ - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin; for things like gpg keys, set up in individual users
  
 ### Extra Checklist
  - Terminal
    - Ensure that [Secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) is enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
    - [Prevent](https://github.com/sunknudsen/guides/tree/main/archive/how-to-protect-mac-computers-from-cold-boot-attacks) cold-boot attacks
+```zsh
+sudo pmset -a destroyfvkeyonstandby 1 hibernatemode 25 standbydelaylow 0 standbydelayhigh 0
+```
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
@@ -30,14 +35,18 @@ This guide reflects the "secure, not private" concept in that, although these se
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
-## 1. DNS Setup
- > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in only one account (admin) to prevent duplicate instances. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
- 
- > This tutorial should be done in admin's GUI because Part (3) requires running a privileged script, but admin cannot read/write warren's files if downloaded there.
+## 1. CLI Tools
+
+ > This tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if necessary.
+
+ - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion.
+ - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php). More tools will be available in section 5.
+
+## 2. DNS Setup
+ > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
 
  1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works.
- 2. Install MacPorts with `xcode-select --install` and its [package](https://www.macports.org/install.php).
- 3. Add MacPorts to warren's shells:
+ 2. Add MacPorts to warren's shells:
 ```zsh
 su - warren
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
@@ -55,12 +64,12 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 > Some VPN applications override DNS settings on connect; may need to reconfigure VPN and make it use the local DNS server (change DNS to 127.0.0.1).
 > No need to configure DNSSEC in this step; it will be handled with Unbound.
 
- 1. Again, first install xcode command line tools and MacPorts in the admin user. Note: all `sudo` commands must be run inside admin, i.e. `su - admin`.
- 2. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
-    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`. Also copy Unbound's [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf) beforehand.
+ 1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
+    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
+    - Also copy the Unbound [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf) beforehand.
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
- 3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
- 4. Edit the file and replace the following settings:
+ 2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
+ 3. Edit the file and replace the following settings:
 ```zsh
 sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 ```
@@ -164,7 +173,7 @@ routes = [
 skip_incompatible = true
 direct_cert_fallback = false
 ```
- 5. Edit the property list to give DNSCrypt startup access:
+ 4. Edit the property list to give DNSCrypt startup access:
 ```zsh
 sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dnscrypt-proxy.plist
 ```
@@ -196,13 +205,13 @@ sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dn
   </dict>
 </plist>
 ```
- 6. Load the proxy:
+ 5. Load the proxy:
 ```zsh
 sudo launchctl enable system/org.macports.dnscrypt-proxy
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
- 7. Check if current configuration is valid (will not run otherwise):
+ 6. Check if current configuration is valid (will not run otherwise):
 ```zsh
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -check
 # Remember to reload dnscrypt-proxy after toml change
@@ -226,15 +235,15 @@ networksetup -getdnsservers "Wi-Fi"
 scutil --dns | head -10
 # nameserver[0] : 127.0.0.1
 ```
- 8. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 1(C)
+ 8. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
 
 **Note** dnscrypt-proxy will take ~30 seconds to load on startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
- 1. Unbound should already be installed in 1(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] stored somewhere from 1(B) into Unbound:
+ 1. Unbound should already be installed in 2(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
+ 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] stored somewhere from 2(B) into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
 # Edit file
@@ -322,7 +331,7 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 <sup>https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html</sup>
 <sup>https://wiki.archlinux.org/title/Unbound</sup>
 
-## 2. Santa Setup
+## 3. Santa Setup
  1. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases)
  2. Grant permissions:
     - "Login Items & Extensions" > "App Background Activity" add Santa.app
@@ -369,7 +378,7 @@ sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475
 sudo santactl rule --export santa1.json
 ```
 
-## 3. mSCP Setup
+## 4. mSCP Setup
 Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
 
  > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
@@ -412,8 +421,23 @@ source venv/bin/activate
 python3 -m pip install --upgrade pip
 pip3 install pyyaml xlwt
 ```
- 4. Optional: load custom ODVs (organization-defined values)
+ 4. Small tangent: also check if MacPort libs also work in warren.
 ```zsh
+su - warren
+python3 --version
+# Python 3.14.2
+python --version
+# Python 3.14.2
+pip3 --version
+# pip 25.3 from /opt/local/Library
+pip --version
+# pip 25.3 from /opt/local/Library
+exit
+```
+ 5. Optional: load custom ODVs (organization-defined values)
+```zsh
+cd ~/Desktop/Profiles/macos_security-tahoe
+
 cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
 odv:
   custom: 12
@@ -429,7 +453,7 @@ odv:
   custom: 0
 EOF
 ```
- 5. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
+ 6. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
 ```zsh
 python3 scripts/generate_guidance.py \
         -P \
@@ -437,30 +461,28 @@ python3 scripts/generate_guidance.py \
         -p \
     build/baselines/cnssi-1253_cust.yaml
 ```
- 6. If there is a previous profile installed, remove it in Settings first. Run the compliance script.
+ 7. If there is a previous profile installed, remove it in Settings first. Run the compliance script.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
- 8. Install the configuration profile in the Settings app:
+ 8. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
+ 9. Install the configuration profile in the Settings app:
 ```zsh
-cd build/cnssi-1253_cust/mobileconfigs/unsigned
-sudo open cnssi-1253_cust.mobileconfig
-cd ../../../..
+sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
 ```
- 9. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 10. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
+ 10. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 11. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 11. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There will be a handful of them.
- 12. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 13. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 12. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
+ 13. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 14. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 14. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
+ 15. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -468,20 +490,22 @@ sudo bash includes/enablePF-mscp.sh
 sudo pfctl -a '*' -sr | grep "block drop in all"
 # Should output smt like "block drop in all" i.e. default deny all incoming
 sudo pfctl -s info
-# Should be running
+# Should give output
 
 # FileVault
 sudo fdesetup status
 ```
- 15. Note from previous step: one might encounter these two warnings.
+ 16. Note from previous step: one might encounter these two warnings.
     - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
     - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 16. The script should yield 100% compliance by running option 2, then option 1. Restart the device.
+ 17. The script should yield 100% compliance by running option 2, then option 1.
+
+**Note** restart the device at this point. Congrats!
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
-## 4. Application Install
-> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory.
+## 5. Application Install
+> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
 
 > If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
@@ -489,7 +513,7 @@ sudo fdesetup status
 ```zsh
 sudo dseditgroup -o edit -d warren -t user admin
 ```
- 3. Force certain `/Library` folders to be inaccessible to apps in `~/Library`.
+ 2. Force certain `/Library` folders to be inaccessible to apps in `~/Library`.
 ```zsh
 sudo vi ~/Desktop/Profiles/directory_lock.sh
 ```
