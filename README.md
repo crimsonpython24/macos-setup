@@ -1,4 +1,4 @@
-# MacOS Setup (WIP)
+# macOS Setup (WIP)
 
 ## 0. Basics
 ### Administrative Account ("Admin")
@@ -11,7 +11,7 @@
  - Do not use the admin account besides initializing the machine
  - Do not install any apps as Admin unless necessary, as some should run just fine outside the root directory (i.e. `/Applications`)
    - Said apps will prompt for password if they need privilege escalations regardless
-   - Do not move pre-/auto-installed MacOS apps around in Finder, because future updates might break those modifications
+   - Do not move pre-/auto-installed macOS apps around in Finder, because future updates might break those modifications
  - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin
  
 ### Extra Checklist
@@ -31,11 +31,11 @@ This guide reflects the "secure, not private" concept in that, although these se
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. DNS Setup
- > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in admin and not warren to prevent duplicate instances. Avoid using packages to keep dependency tree clean.
+ > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in only one account (admin) to prevent duplicate instances. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
 
- > When downloading stuff with LibreWolf, fix the notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
+ > If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
- 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. Everything in this tutorital can be done in either user's GUI session (personally prefer to log in as warren and `su - admin` whenever necessary).
+ 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. This tutorial should be done in admin's GUI because part (3) requires running a privileged script, but admin cannot read/write warren's files if downloaded there.
  2. Add MacPorts to warren's shells:
 ```zsh
 su - warren
@@ -55,8 +55,8 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 
  1. Again, first install xcode command line tools and MacPorts in the admin user. Note: all `sudo` commands must be run inside admin, i.e. `su - admin`.
  2. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
-    - Update DNS server settings to point to 127.0.0.1 (Settings > "Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
     - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`. Also copy Unbound's [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf) beforehand.
+    - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  3. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
  4. Edit the file and replace the following settings:
 ```zsh
@@ -80,10 +80,6 @@ require_dnssec = true
 require_nolog = true
 require_nofilter = true
 
-# load balancing server selection
-lb_strategy = 'p2'
-lb_estimator = true
-
 # disable resolvers whose operators also run anonymizing relays
 # prevents same operator from seeing both relay and resolver traffic
 disabled_server_names = [
@@ -96,10 +92,14 @@ disabled_server_names = [
 force_tcp = false
 timeout = 5000
 keepalive = 30
-cert_refresh_delay = 240
-cert_ignore_timestamp = false
+
+# load balancing server selection
+lb_strategy = 'p2'
+lb_estimator = true
 
 # privacy hardening
+cert_refresh_delay = 240
+cert_ignore_timestamp = false
 dnscrypt_ephemeral_keys = true
 tls_disable_session_tickets = true
 
@@ -158,7 +158,7 @@ routes = [
         'anon-inconnu'
     ]}
 ]
-skip_incompatible = true
+skip_incompatible = false
 direct_cert_fallback = false
 ```
  5. Edit the property list to give DNSCrypt startup access:
@@ -222,13 +222,10 @@ networksetup -getdnsservers "Wi-Fi"
 
 scutil --dns | head -10
 # nameserver[0] : 127.0.0.1
-
-sudo dscacheutil -flushcache
-sudo killall -HUP mDNSResponder
 ```
  8. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 1(C)
 
-**Note** dnscrypt-proxy will take a few seconds to load on startup, so there might not be connection immediately after session login.
+**Note** dnscrypt-proxy will take ~30 seconds to load on startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
@@ -280,27 +277,29 @@ unbound-host -vDr badsig.test.dnscheck.tools
 **Note** Some websites will not have `ad` flag no matter how hard one tries. E.g.,
 ```zsh
 dig DNSKEY archlinux.org
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38272
-;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
-
-;; QUESTION SECTION:
-;archlinux.org.			IN	DNSKEY    <--- empty!
-
-;; AUTHORITY SECTION:
-archlinux.org.		3600	IN	SOA	hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010201 86400 10800 3600000 3600
+# ;; Got answer:
+# ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38272
+# ;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+# 
+# ;; QUESTION SECTION:
+# ;archlinux.org.			IN	DNSKEY
+# 
+# No answer section!
+# 
+# ;; AUTHORITY SECTION:
+# archlinux.org.		3600	IN	SOA	hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010201 86400 10800 3600000 3600
 ```
 ```zsh
 dig DNSKEY dnssec.works
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 65193
-;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
-
-;; QUESTION SECTION:
-;dnssec.works.			IN	DNSKEY
-
-;; ANSWER SECTION:
-dnssec.works.		4965	IN	DNSKEY	257 3 8 AwEAAa+YwrBlCwfJzwmsSK87hKFAm+yz0...
+# ;; Got answer:
+# ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 65193
+# ;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+# 
+# ;; QUESTION SECTION:
+# ;dnssec.works.			IN	DNSKEY
+# 
+# ;; ANSWER SECTION:
+# dnssec.works.		4965	IN	DNSKEY	257 3 8 AwEAAa+YwrBlCwfJzwmsSK87hKFAm+yz0...
 ```
 
 **Note** Debugging commands:
@@ -321,13 +320,13 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 <sup>https://wiki.archlinux.org/title/Unbound</sup>
 
 ## 2. Santa Setup
- 1. Install the updated release from Northpole on [GitHub](https://northpole.dev/deployment/install-package/#releases)
+ 1. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases)
  2. Grant permissions:
     - "Login Items & Extensions" > "App Background Activity" add Santa.app
-    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" add Santa daemon
-    - "Login Items & Extensions" > "Extensions" > "By App" > should show "Santa" after restarting Settings
+    - "Login Items & Extensions" > "Extensions" > "By App" > toggle "Santa"
+    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" toggle Santa daemon
     - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
- 3. Check if Santa is running:
+ 3. Quit and re-open the terminal to check if Santa is running:
 ```zsh
 sudo santactl doctor
 ```
@@ -340,26 +339,27 @@ sudo open santa.mobileconfig
  5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
 ```zsh
 santactl fileinfo /System/Applications/Dictionary.app 
-Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
-SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
-Bundle Name            : Dictionary
-Bundle Version         : 294
-Bundle Version Str     : 2.3.0
-Signing ID             : platform:com.apple.Dictionary
+# Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
+# SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+# SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
+# Bundle Name            : Dictionary
+# Bundle Version         : 294
+# Bundle Version Str     : 2.3.0
+# Signing ID             : platform:com.apple.Dictionary
 
-# Better approach: use signing ID (will not change even with app update)
+# Use signing ID (will not change even with app update)
 sudo santactl rule \
   --block \
   --signingid \
   --identifier platform:com.apple.Dictionary
+
+santactl fileinfo /System/Applications/Dictionary.app 
+# Rule                   : Blocked (SigningID)
 ```
 ```zsh
-sudo santactl rule --block --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
-# Added rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-
-sudo santactl rule --remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-# Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f.
+# Deprecated appproach: sha-256
+sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
+# Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 ```
  6. When importing/exporting rules, use:
 ```zsh
@@ -367,7 +367,7 @@ sudo santactl rule --export santa1.json
 ```
 
 ## 3. mSCP Setup
-Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and a configuration profile that implements the changes.
+Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
 
  > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
 
@@ -378,17 +378,31 @@ mkdir baselines && cd baselines
 vi cnssi-1253_cust.yaml
 ```
  2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
- 3. Install dependencies, recommended within a virtual environment.
+ 3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip.
 ```zsh
 sudo port install python314
 sudo port select --set python python314
 sudo port select --set python3 python314
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
+source ~/.zshrc
+source ~/.bash_profile
+
+python --version
+# Python 3.14.2
+python3 --version
+# Python 3.14.2
 
 sudo port install py314-pip 
 sudo port select --set pip pip314
+sudo port select --set pip3 pip314
+rehash (zsh) / hash -r (bash)
+pip --version
+# pip 25.3
+pip3 --version
+# pip 25.3
 ```
 ```zsh
-su - warren
 cd ~/Desktop/Profiles/macos_security-tahoe
 python3 -m venv venv
 source venv/bin/activate
@@ -424,14 +438,15 @@ python3 scripts/generate_guidance.py \
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%. Exit the tool.
- 8. Install the configuration profile (one might have to open the Settings app to install the profile):
+ 7. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
+ 8. Install the configuration profile in the Settings app:
 ```zsh
 cd build/cnssi-1253_cust/mobileconfigs/unsigned
 sudo open cnssi-1253_cust.mobileconfig
+cd ../../../..
 ```
  9. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 10. Exit (if not already) and run the compliance script again (step 7) with options 2, then 1 in that order. The script should now yield ~80% compliance.
+ 10. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
