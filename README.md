@@ -477,6 +477,83 @@ sudo fdesetup status
 
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
+## 4. Fish Shell
+
+ 1. Install fish through the admin account:
+```zsh
+su - admin
+sudo port install fish
+```
+ 2. Switch shells for warren only:
+```zsh
+sudo vi /etc/shells
+# Add
+/opt/local/bin/fish
+sudo chpass -s /opt/local/bin/fish warren
+```
+ 3. Add paths to fish:
+```fish
+ fish_add_path /opt/local/bin
+ fish_add_path /opt/local/sbin
+```
+ 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo†](https://github.com/cpy24/iterm-setup).
+ 5. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
+    - [jethrokuan/z](https://github.com/jethrokuan/z)
+    - [PatrickF1/fzf.fish](https://github.com/PatrickF1/fzf.fish) -- depends on `sudo port install fzf fd bat`
+    - [jorgebucaran/nvm.fish](https://github.com/jorgebucaran/nvm.fish)
+    - [jorgebucaran/autopair.fish](https://github.com/jorgebucaran/autopair.fish)
+    - [nickeb96/puffer-fish](https://github.com/nickeb96/puffer-fish)
+ 6. Configure `fzf` key bindings:
+```fish
+echo "fzf_configure_bindings --directory=\cf --git_log=\cl --git_status=\cs --history=\cr --processes=\cp --variables=\cv" >> ~/.config/fish/config.fish
+```
+ 7. Download Node: `nvm install lts`.
+ 8. Add custom functions:
+```fish
+~/.config/fish/functions/mkcd.fish
+
+function mkcd
+    mkdir -p $argv[1] && cd $argv[1]
+end
+```
+```fish
+vi ~/.config/fish/functions/up.fish
+
+function up
+  if test -z $argv[1]
+    set n 1
+  else
+    set n $argv[1]
+  end
+  for i in (seq $n)
+    cd ..
+  end
+end
+```
+```fish
+# sudo port install ffmpeg youtube-dl
+vi ~/.config/fish/functions/gif.fish
+
+function gif
+    ffmpeg -i $argv[1] -vf fps=5,scale=480:-1,smartblur=ls=-0.5 $argv[2]
+end
+```
+```fish
+vi ~/.config/fish/functions/uext.fish
+
+function uext
+    find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
+end
+```
+ 9. Test YouTube download functionality: first download [youtube-dl nightly](https://github.com/ytdl-org/ytdl-nightly/releases), then run:
+```fish
+chmod +x /Users/warren/.local/bin/youtube-dl
+/Users/warren/.local/bin/youtube-dl https://www.youtube.com/watch?v=QvghQOO3K-I
+gif 'Cute Pop Sound Effects-QvghQOO3K-I.mp4' vid.gif
+# Should both work; open gif in e.g. Firefox
+```
+ 10. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations†](https://github.com/cpy24/iterm-setup)
+
 ## Footnotes
 
 Reboot and everything should work, even by directly logging into `warren` and not `admin`.
