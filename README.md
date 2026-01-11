@@ -515,34 +515,49 @@ sudo dseditgroup -o edit -d warren -t user admin
 ```
  2. Force certain `/Library` folders to be inaccessible to apps in `~/Library`.
 ```zsh
-sudo vi ~/Desktop/Profiles/directory_lock.sh
+vi ~/Desktop/Profiles/directory_lock.sh
 ```
 ```zsh
 CRITICAL_DIRS=(
     "/Library/LaunchAgents"
     "/Library/LaunchDaemons"
     "/Library/StartupItems"
-    "/Library/PrivilegedHelperTools"
 )
 
 for dir in "${CRITICAL_DIRS[@]}"; do
     sudo chmod +a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" "$dir"
 done
 ```
- 3. Rollback command:
+```zsh
+sudo chmod +x ~/Desktop/Profiles/directory_lock.sh
+./directory_lock.sh
+```
+ 3. Note for step 2: one can add `/Library/PrivilegedHelperTools` into the directory list, but this will not be created until an application writes to that directory. I.e., this directory will be empty if one runs this script in a fresh system. Also test step 2:
+```zsh
+ls -led /Library/LaunchAgents
+ls -led /Library/LaunchDaemons
+ls -led /Library/StartupItems
+
+# drwxr-xr-x+ 3 root  wheel  96 Jan 11 14:30 /Library/LaunchAgents
+#  0: user:warren deny add_file,delete,add_subdirectory,delete_child,writeattr,writeextattr
+```
+ 4. Rollback command:
 ```zsh
 sudo chmod -a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" /Library/LaunchAgents
 ```
- 4. If any applications are curl'd through Git, use GnuPG instead of gpg:
+ 5. If any applications are curl'd through Git, use GnuPG instead of gpg:
 ```zsh
 sudo port install gnupg2
+sudo port load openldap
 which gpg
 # /opt/local/bin/gpg
 ```
 
 **Note** when using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/user-overrides.js) in this repo.
 
-## 5. Fish Shell
+## 6. Fish Shell
+
+> From this point on, only run in warren (keep zsh as default for admin since that account should not be used besides global settings).
 
  1. First change the hostname:
 ```zsh
