@@ -198,5 +198,4 @@ user_pref("browser.urlbar.fakespot.featureGate", false);
 user_pref("browser.download.manager.addToRecentDocs", false);
 user_pref("browser.privatebrowsing.forceMediaMemoryCache", true);
 user_pref("clipboard.autocopy", false);
-user_pref("keyword.enabled", false);
 user_pref("devtools.debugger.force-local", true);
