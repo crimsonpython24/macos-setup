@@ -33,7 +33,14 @@ user_pref("privacy.userContext.enabled", false);
 user_pref("privacy.userContext.ui.enabled", false);
 
 /*** WEBRTC ***/
+user_pref("media.peerconnection.enabled", false);
+user_pref("media.peerconnection.ice.default_address_only", true);
 user_pref("media.peerconnection.ice.no_host", true);
+user_pref("media.peerconnection.ice.proxy_only_if_behind_proxy", true);
+
+/*** FINGERPRINTING VECTORS ***/
+user_pref("media.navigator.enabled", false);
+user_pref("device.sensors.enabled", false);
 
 /*** MEDIA ***/
 user_pref("media.gmp-provider.enabled", false);
@@ -67,7 +74,7 @@ user_pref("webgl.disabled", true);
 /*** OPSEC ***/
 user_pref("signon.rememberSignons", false);
 user_pref("browser.chrome.site_icons", false);
-user_pref("browser.sessionstore.max_tabs_undo", 50);
+user_pref("browser.sessionstore.max_tabs_undo", 0);
 user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("browser.download.forbid_open_with", true);
 user_pref("browser.urlbar.suggest.history", false);
