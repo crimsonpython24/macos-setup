@@ -67,7 +67,7 @@ user_pref("webgl.disabled", true);
 /*** OPSEC ***/
 user_pref("signon.rememberSignons", false);
 user_pref("browser.chrome.site_icons", false);
-user_pref("browser.sessionstore.max_tabs_undo", 0);
+user_pref("browser.sessionstore.max_tabs_undo", 50);
 user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("browser.download.forbid_open_with", true);
 user_pref("browser.urlbar.suggest.history", false);
@@ -161,3 +161,35 @@ user_pref("browser.urlbar.richSuggestions.featureGate", false);
 user_pref("browser.urlbar.searchTips.enabled", false);
 user_pref("browser.ping-centre.telemetry", false);
 user_pref("toolkit.telemetry.pioneer-new-studies-available", false);
+
+/*** NETWORK HARDENING ***/
+user_pref("network.IDN_show_punycode", true);
+user_pref("network.dns.disableIPv6", true);
+user_pref("network.httpredirection-limit", 5);
+user_pref("network.auth.subresource-http-auth-allow", 1);
+
+/*** TLS/CERTIFICATE ***/
+user_pref("security.OCSP.require", true);
+user_pref("security.cert_pinning.enforcement_level", 2);
+user_pref("security.tls.enable_0rtt_data", false);
+user_pref("security.ssl.require_safe_negotiation", true);
+
+/*** DOM/JAVASCRIPT ***/
+user_pref("dom.disable_window_move_resize", true);
+user_pref("dom.event.contextmenu.enabled", false);
+user_pref("pdfjs.enableScripting", false);
+user_pref("dom.event.clipboardevents.enabled", false);
+
+/*** URL BAR FEATURE GATES ***/
+user_pref("browser.urlbar.trimURLs", false);
+user_pref("browser.urlbar.addons.featureGate", false);
+user_pref("browser.urlbar.weather.featureGate", false);
+user_pref("browser.urlbar.yelp.featureGate", false);
+user_pref("browser.urlbar.fakespot.featureGate", false);
+
+/*** MISC PRIVACY ***/
+user_pref("browser.download.manager.addToRecentDocs", false);
+user_pref("browser.privatebrowsing.forceMediaMemoryCache", true);
+user_pref("clipboard.autocopy", false);
+user_pref("keyword.enabled", false);
+user_pref("devtools.debugger.force-local", true);
