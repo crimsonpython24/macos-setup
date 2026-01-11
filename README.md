@@ -32,15 +32,17 @@ This guide reflects the "secure, not private" concept in that, although these se
 
 ## 1. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Install xcode/MacPorts in only one account (admin) to prevent duplicate instances. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
+ 
+ > This tutorial should be done in admin's GUI because Part (3) requires running a privileged script, but admin cannot read/write warren's files if downloaded there.
 
- > If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
-
- 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. This tutorial should be done in admin's GUI because part (3) requires running a privileged script, but admin cannot read/write warren's files if downloaded there.
- 2. Add MacPorts to warren's shells:
+ 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works.
+ 2. Install MacPorts with `xcode-select --install` and its [package](https://www.macports.org/install.php).
+ 3. Add MacPorts to warren's shells:
 ```zsh
 su - warren
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
+exit
 ```
 
 ### A) Hosts File
@@ -158,7 +160,8 @@ routes = [
         'anon-inconnu'
     ]}
 ]
-skip_incompatible = false
+
+skip_incompatible = true
 direct_cert_fallback = false
 ```
  5. Edit the property list to give DNSCrypt startup access:
@@ -231,7 +234,7 @@ scutil --dns | head -10
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
  1. Unbound should already be installed in 1(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] into Unbound:
+ 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] stored somewhere from 1(B) into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
 # Edit file
@@ -478,8 +481,9 @@ sudo fdesetup status
 **Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 4. Application Install
+> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory.
 
-> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory. 
+> If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
