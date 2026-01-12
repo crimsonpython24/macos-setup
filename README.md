@@ -131,8 +131,8 @@ cache = true
 cache_size = 4096
 cache_min_ttl = 2400
 cache_max_ttl = 86400
-cache_neg_min_ttl = 60
-cache_neg_max_ttl = 600
+cache_neg_min_ttl = 5
+cache_neg_max_ttl = 15
 
 # resolver sources (replace existing config)
 [sources.public-resolvers]
