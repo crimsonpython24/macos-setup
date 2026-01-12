@@ -74,7 +74,7 @@ user_pref("webgl.disabled", true);
 /*** OPSEC ***/
 user_pref("signon.rememberSignons", false);
 user_pref("browser.chrome.site_icons", false);
-user_pref("browser.sessionstore.max_tabs_undo", 0);
+user_pref("browser.sessionstore.max_tabs_undo", 50);
 user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("browser.download.forbid_open_with", true);
 user_pref("browser.urlbar.suggest.history", false);
