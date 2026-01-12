@@ -96,9 +96,6 @@ Host *
   # Use IPv4 only (more predictable, avoids IPv6 leaks on some networks)
   AddressFamily inet
 
-  # SSH Protocol 2 only (implicit in modern OpenSSH, but explicit is clearer)
-  # Protocol 2  # Deprecated option, SSH1 is removed in modern OpenSSH
-
   # ---------------------------------------------------------------------------
   # CRYPTOGRAPHIC ALGORITHMS (CRITICAL SECURITY SETTINGS)
   # ---------------------------------------------------------------------------
@@ -129,6 +126,9 @@ Host *
   # ---------------------------------------------------------------------------
   # AUTHENTICATION SETTINGS
   # ---------------------------------------------------------------------------
+  # Enable public key authentication
+  PubkeyAuthentication yes
+
   # Disable password authentication - keys only
   PasswordAuthentication no
 
@@ -138,8 +138,17 @@ Host *
   # Disable challenge-response authentication
   ChallengeResponseAuthentication no
 
+  # Disable host-based authentication
+  HostbasedAuthentication no
+
+  # Disable GSSAPI authentication (Kerberos)
+  GSSAPIAuthentication no
+
   # Prefer publickey authentication
   PreferredAuthentications publickey
+
+  # Only use identity files explicitly specified (security best practice)
+  IdentitiesOnly yes
 
   # ---------------------------------------------------------------------------
   # SECURITY: AGENT & X11 FORWARDING
@@ -153,10 +162,14 @@ Host *
   ForwardX11 no
   ForwardX11Trusted no
 
+  # Prevent local command execution
+  PermitLocalCommand no
+
   # ---------------------------------------------------------------------------
   # HOST KEY VERIFICATION
   # ---------------------------------------------------------------------------
-  # Always ask before adding new host keys (prevents MITM on first connection)
+  # Ask before adding new host keys, reject changed keys (prevents MITM)
+  # Options: yes (reject new), ask (prompt), accept-new (auto-add new, reject changed)
   StrictHostKeyChecking ask
 
   # Verify host keys via DNS SSHFP records when available
@@ -164,6 +177,12 @@ Host *
 
   # Check that the host IP hasn't changed (DNS spoofing protection)
   CheckHostIP yes
+
+  # Use SHA256 for fingerprint display (more secure than MD5)
+  FingerprintHash sha256
+
+  # Update host keys automatically when server rotates them (OpenSSH 6.8+)
+  UpdateHostKeys yes
 
   # ---------------------------------------------------------------------------
   # PRIVACY & ANONYMITY
@@ -174,6 +193,15 @@ Host *
 
   # Show visual ASCII art fingerprint on connection (helps notice changes)
   VisualHostKey yes
+
+  # ---------------------------------------------------------------------------
+  # HOSTNAME CANONICALIZATION
+  # ---------------------------------------------------------------------------
+  # Canonicalize hostname for better host key verification
+  CanonicalizeHostname yes
+  CanonicalizeFallbackLocal yes
+  # Optional: Add your domains for better canonicalization
+  # CanonicalizeDomains example.com
 
   # ---------------------------------------------------------------------------
   # CONNECTION KEEPALIVE
@@ -196,22 +224,34 @@ Host *
   ControlPersist 600
 
   # ---------------------------------------------------------------------------
-  # MISCELLANEOUS
+  # FORWARD SECRECY & ENCRYPTION
   # ---------------------------------------------------------------------------
-  # Use compression for slow connections (usually not needed on fast networks)
-  #Compression yes
+  # Force rekeying for perfect forward secrecy (every 1GB of data or 1 hour)
+  RekeyLimit 1G 1h
+
+  # ---------------------------------------------------------------------------
+  # NETWORK & PERFORMANCE
+  # ---------------------------------------------------------------------------
+  # Disable compression (negligible benefit on modern networks, potential security risk)
+  Compression no
+
+  # Quality of Service markers for better network performance
+  IPQoS af21 cs1
 
   # Connection timeout (seconds) - fail fast on unreachable hosts
   ConnectTimeout 30
 
+  # Exit if port forwarding fails (security for forwarded connections)
+  ExitOnForwardFailure yes
+
+  # Clean up socket files when done
+  StreamLocalBindUnlink yes
+
+  # ---------------------------------------------------------------------------
+  # LOGGING & DEBUGGING
+  # ---------------------------------------------------------------------------
+  # Log verbosity (INFO for audit trail, DEBUG for troubleshooting)
+  LogLevel INFO
+
   # Number of password prompts (irrelevant if PasswordAuthentication is no)
   NumberOfPasswordPrompts 0
-
-  # Log verbosity (increase to DEBUG for troubleshooting)
-  LogLevel ERROR
-
-  # Update host keys automatically when server rotates them (OpenSSH 6.8+)
-  UpdateHostKeys yes
-
-  # Request that the SSH server obey the terminal flow control (^S/^Q)
-  #StreamLocalBindUnlink yes
