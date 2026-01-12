@@ -117,7 +117,7 @@ tls_disable_session_tickets = true
 # fallbacks
 bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
 ignore_system_dns = true
-netprobe_timeout = 60
+netprobe_timeout = 10
 netprobe_address = '9.9.9.9:53'
 
 # query filtering
