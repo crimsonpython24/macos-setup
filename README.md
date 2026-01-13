@@ -92,7 +92,6 @@ require_nolog = true
 require_nofilter = true
 
 # disable resolvers whose operators also run anonymizing relays
-# prevents same operator from seeing both relay and resolver traffic
 disabled_server_names = [
     'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
     'scaleway-fr', 'scaleway-ams',
@@ -101,10 +100,10 @@ disabled_server_names = [
 
 # connection settings
 force_tcp = false
-timeout = 10000
+timeout = 15000
 keepalive = 60
 
-# load balancing server selection
+# load balancing
 lb_strategy = 'p2'
 lb_estimator = true
 
@@ -134,7 +133,7 @@ cache_max_ttl = 86400
 cache_neg_min_ttl = 5
 cache_neg_max_ttl = 15
 
-# resolver sources (replace existing config)
+# resolver sources
 [sources.public-resolvers]
 urls = [
     'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
@@ -145,36 +144,7 @@ minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 refresh_delay = 73
 prefix = ''
 
-[sources.relays]
-urls = [
-    'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
-    'https://download.dnscrypt.info/resolvers-list/v3/relays.md',
-]
-cache_file = 'relays.md'
-minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-refresh_delay = 73
-prefix = ''
-
-# anonymized dns (relay thru 3p servers)
-[anonymized_dns]
-routes = [
-    { server_name='*', via=[
-        'anon-cs-de',
-        'anon-cs-nl', 
-        'anon-cs-fr',
-        'anon-scaleway-ams',
-        'anon-kama',
-        'anon-ibksturm',
-        'anon-meganerd',
-        'anon-inconnu',
-        'anon-cs-austria',
-        'anon-cs-barcelona',
-        'anon-v.dnscrypt.uk-ipv4'
-    ]}
-]
-
-skip_incompatible = true
-direct_cert_fallback = true
+# Removed relays due to inconsistency 
 ```
  4. Edit the property list to give DNSCrypt startup access:
 ```zsh
