@@ -101,8 +101,8 @@ disabled_server_names = [
 
 # connection settings
 force_tcp = false
-timeout = 5000
-keepalive = 30
+timeout = 10000
+keepalive = 60
 
 # load balancing server selection
 lb_strategy = 'p2'
@@ -115,9 +115,9 @@ dnscrypt_ephemeral_keys = true
 tls_disable_session_tickets = true
 
 # fallbacks
-bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53']
+bootstrap_resolvers = ['9.9.9.9:53', '149.112.112.112:53', '1.1.1.1:53', '8.8.8.8:53']
 ignore_system_dns = true
-netprobe_timeout = 10
+netprobe_timeout = 60
 netprobe_address = '9.9.9.9:53'
 
 # query filtering
@@ -166,12 +166,15 @@ routes = [
         'anon-kama',
         'anon-ibksturm',
         'anon-meganerd',
-        'anon-inconnu'
+        'anon-inconnu',
+        'anon-cs-austria',
+        'anon-cs-barcelona',
+        'anon-v.dnscrypt.uk-ipv4'
     ]}
 ]
 
 skip_incompatible = true
-direct_cert_fallback = false
+direct_cert_fallback = true
 ```
  4. Edit the property list to give DNSCrypt startup access:
 ```zsh
