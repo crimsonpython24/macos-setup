@@ -182,7 +182,7 @@ routes = [
     ]}
 ]
 
-skip_incompatible = true
+skip_incompatible = false
 direct_cert_fallback = true
 
 # Broken implementations workaround
