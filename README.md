@@ -23,18 +23,32 @@ Total time needed (from empty system): 70-90 mins, depending on Internet connect
    - Implement some more hardware hardening:
 ```zsh
 # Cold boot attacks
-sudo pmset -a destroyfvkeyonstandby 1 hibernatemode 25 standbydelaylow 0 standbydelayhigh 0
-
-# Disable hibernation (writes RAM to disk)
-sudo pmset -a hibernatemode 0
-sudo pmset -a standby 0
-sudo pmset -a autopoweroff 0
-
-# Disable sudden motion sensor (prevents some RAM dumps)
-sudo pmset -a sms 0
+sudo pmset -a destroyfvkeyonstandby 1
+sudo pmset -a hibernatemode 25
+sudo pmset -a standbydelaylow 0
+sudo pmset -a standbydelayhigh 0
+sudo pmset -a highstandbythreshold 0
+sudo pmset -a powernap 0
+sudo pmset -a tcpkeepalive 0
+sudo pmset -a proximitywake 0
 
 # Reduce unified log retention
 sudo log config --mode "level:off" --subsystem com.apple.diagnosticd
+
+# Prevents SUID programs from dumping core
+sudo sysctl -w kern.sugid_coredump=0
+
+# Randomize MAC on each connection
+sudo ifconfig en0 ether $(openssl rand -hex 6 | sed 's/\(..\)/\1:/g; s/.$//')
+
+# Secure virtual memory (add to your guide)
+sudo defaults write /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap -bool YES
+
+# Verify
+defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
+
+# (Not hardware but) disable automatic login completely
+sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null
 ```
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
@@ -431,6 +445,11 @@ CRITICAL_DIRS=(
     "/Library/LaunchAgents"
     "/Library/LaunchDaemons"
     "/Library/StartupItems"
+    "/Library/PrivilegedHelperTools" 
+    "/Library/Security/SecurityAgentPlugins"
+    "/Library/DirectoryServices/PlugIns"
+    "/System/Library/LaunchAgents"
+    "/System/Library/LaunchDaemons"
 )
 
 for dir in "${CRITICAL_DIRS[@]}"; do
