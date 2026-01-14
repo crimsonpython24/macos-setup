@@ -76,56 +76,65 @@ sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 ```toml
 # /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 
-# listener config
+# Listener config
 listen_addresses = ['127.0.0.1:54', '[::1]:54']
 
-# server selection
+# Server selection
 ipv4_servers = true
 ipv6_servers = false
 dnscrypt_servers = true
 doh_servers = false
 odoh_servers = false
 
-# server requirements
+# Server requirements
 require_dnssec = true
 require_nolog = true
 require_nofilter = true
 
-# disable resolvers whose operators also run anonymizing relays
+# Disable servers whose operators also run relays we want to use
+# This is crucial for privacy - server and relay should be different entities
 disabled_server_names = [
     'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
+    'cs-ch', 'cs-berlin', 'cs-belgium', 'cs-brazil', 'cs-czech',
+    'cs-dc', 'cs-dus', 'cs-finland', 'cs-fl', 'cs-ga', 'cs-hungary',
+    'cs-il', 'cs-india', 'cs-la', 'cs-london', 'cs-manchester',
+    'cs-md', 'cs-milan', 'cs-montreal', 'cs-nl', 'cs-norway',
+    'cs-nv', 'cs-nyc', 'cs-ore', 'cs-poland', 'cs-pt', 'cs-ro',
+    'cs-sea', 'cs-serbia', 'cs-singapore', 'cs-sk', 'cs-swe',
+    'cs-sydney', 'cs-tokyo', 'cs-tx', 'cs-vancouver',
     'scaleway-fr', 'scaleway-ams',
-    'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6', 'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
+    'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6', 
+    'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
 ]
 
-# connection settings
+# Connection settings - increased timeout for relay paths
 force_tcp = false
-timeout = 15000
+timeout = 5000
 keepalive = 60
 
-# load balancing
+# Load balancing
 lb_strategy = 'p2'
 lb_estimator = true
 
-# privacy hardening
+# Privacy hardening
 cert_refresh_delay = 240
 cert_ignore_timestamp = false
 dnscrypt_ephemeral_keys = true
 tls_disable_session_tickets = true
 
-# fallbacks
+# Fallbacks
 bootstrap_resolvers = ['9.9.9.9:53', '149.112.112.112:53', '1.1.1.1:53', '8.8.8.8:53']
 ignore_system_dns = true
 netprobe_timeout = 60
 netprobe_address = '9.9.9.9:53'
 
-# query filtering
+# Query filtering
 block_ipv6 = false
 block_unqualified = true
 block_undelegated = true
 reject_ttl = 10
 
-# cache
+# Cache
 cache = true
 cache_size = 4096
 cache_min_ttl = 2400
@@ -133,7 +142,7 @@ cache_max_ttl = 86400
 cache_neg_min_ttl = 5
 cache_neg_max_ttl = 15
 
-# resolver sources
+# Resolver sources
 [sources.public-resolvers]
 urls = [
     'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
@@ -144,7 +153,44 @@ minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 refresh_delay = 73
 prefix = ''
 
-# Removed relays due to inconsistency 
+# CRITICAL: Enable the relays source
+[sources.relays]
+urls = [
+    'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
+    'https://download.dnscrypt.info/resolvers-list/v3/relays.md',
+]
+cache_file = 'relays.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 73
+prefix = ''
+
+# Anonymized DNS configuration
+[anonymized_dns]
+
+# US West Coast relays for best performance from LA
+# use cryptostorm relays to reach non-cryptostorm servers
+routes = [
+    { server_name = '*', via = [
+        'anon-cs-la',
+        'anon-cs-nv',
+        'anon-cs-sea',
+        'anon-cs-ore',
+        'dnscry.pt-anon-losangeles-ipv4',
+        'dnscry.pt-anon-lasvegas-ipv4',
+        'dnscry.pt-anon-sanjose-ipv4',
+        'dnscry.pt-anon-phoenix-ipv4'
+    ]}
+]
+
+skip_incompatible = true
+direct_cert_fallback = true
+
+# Broken implementations workaround
+[broken_implementations]
+fragments_blocked = [
+    'cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6',
+    'cleanbrowsing-adult', 'cleanbrowsing-family', 'cleanbrowsing-security'
+]
 ```
  4. Edit the property list to give DNSCrypt startup access:
 ```zsh
