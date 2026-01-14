@@ -24,6 +24,33 @@ Total time needed (from empty system): 70-90 mins, depending on Internet connect
 ```zsh
 sudo pmset -a destroyfvkeyonstandby 1 hibernatemode 25 standbydelaylow 0 standbydelayhigh 0
 ```
+ - Implement some more hardware safety nets:
+```zsh
+# Disable hibernation (writes RAM to disk)
+sudo pmset -a hibernatemode 0
+sudo pmset -a standby 0
+sudo pmset -a autopoweroff 0
+
+# Remove existing sleepimage
+sudo rm -f /var/vm/sleepimage
+
+# Create a zero-byte immutable file to prevent recreation
+sudo touch /var/vm/sleepimage
+sudo chflags schg /var/vm/sleepimage
+
+# Disable sudden motion sensor (prevents some RAM dumps)
+sudo pmset -a sms 0
+```
+```zsh
+# Reduce unified log retention
+sudo log config --mode "level:off" --subsystem com.apple.diagnosticd
+
+# Disable metadata server (Spotlight forensic artifacts)
+sudo mdutil -a -i off
+
+# If you don't need Spotlight at all:
+sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.metadata.mds.plist 2>/dev/null
+```
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
