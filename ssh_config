@@ -41,7 +41,9 @@ Host github.com
     IdentityFile ~/.ssh/github_ed25519
     IdentitiesOnly yes
     ControlMaster no
-    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
+    # Prefer Ed25519, fall back to ECDSA if needed
+    HostKeyAlgorithms ssh-ed25519,ecdsa-sha2-nistp256
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
 
 # =============================================================================
 # GLOBAL DEFAULTS
