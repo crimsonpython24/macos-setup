@@ -32,6 +32,11 @@ user_pref("dom.security.https_only_mode.upgrade_local", true);
 user_pref("privacy.userContext.enabled", false);
 user_pref("privacy.userContext.ui.enabled", false);
 
+/*** NETWORK PARTITIONING ***/
+user_pref("privacy.partition.network_state", true);
+user_pref("privacy.partition.serviceWorkers", true);
+user_pref("privacy.partition.bloburl_per_partition_key", true);
+
 /*** WEBRTC ***/
 user_pref("media.peerconnection.enabled", false);
 user_pref("media.peerconnection.ice.default_address_only", true);
@@ -174,6 +179,8 @@ user_pref("network.IDN_show_punycode", true);
 user_pref("network.dns.disableIPv6", true);
 user_pref("network.httpredirection-limit", 5);
 user_pref("network.auth.subresource-http-auth-allow", 1);
+user_pref("network.http.referer.XOriginPolicy", 2);
+user_pref("network.http.referer.XOriginTrimmingPolicy", 2);
 
 /*** TLS/CERTIFICATE ***/
 user_pref("security.OCSP.require", true);
@@ -185,7 +192,6 @@ user_pref("security.ssl.require_safe_negotiation", true);
 user_pref("dom.disable_window_move_resize", true);
 user_pref("dom.event.contextmenu.enabled", false);
 user_pref("pdfjs.enableScripting", false);
-user_pref("dom.event.clipboardevents.enabled", false);
 
 /*** URL BAR FEATURE GATES ***/
 user_pref("browser.urlbar.trimURLs", false);
