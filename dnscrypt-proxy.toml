@@ -120,7 +120,7 @@ tls_disable_session_tickets = true
 ##############################################
 
 # Bootstrap resolvers (only used for initial setup, never for actual queries)
-bootstrap_resolvers = ['9.9.9.9:53', '149.112.112.112:53']
+bootstrap_resolvers = ['9.9.9.9:53', '1.1.1.1:53', '8.8.8.8:53']
 
 # Never fall back to system DNS
 ignore_system_dns = true
@@ -276,17 +276,14 @@ fragments_blocked = [
 
 [anonymized_dns]
 
-# Your original working relay configuration
 routes = [
     { server_name = '*', via = [
-        'anon-cs-la',
-        'anon-cs-nv',
-        'anon-cs-sea',
-        'anon-cs-ore',
-        'dnscry.pt-anon-losangeles-ipv4',
-        'dnscry.pt-anon-lasvegas-ipv4',
-        'dnscry.pt-anon-sanjose-ipv4',
-        'dnscry.pt-anon-phoenix-ipv4'
+        'anon-cs-la', 
+        'dnscry.pt-anon-amsterdam-ipv4',
+        'dnscry.pt-anon-zurich-ipv4',
+        'anon-dnscrypt.no-ipv4',
+        'anon-meganerd-ipv4', 
+        'dnscry.pt-anon-singapore-ipv4'
     ]}
 ]
 
