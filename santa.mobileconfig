@@ -17,41 +17,57 @@
   <key>PayloadContent</key>
   <array>
     <dict>
+      <!-- Core Security -->
       <key>FailClosed</key>
       <true/>
+      <key>EnableBadSignatureProtection</key>
+      <true/>
+      <key>EnablePageZeroProtection</key>
+      <true/>
+      <key>EnableTransitiveRules</key>
+      <true/>
+      <key>EnableSystemExtensionProtection</key>
+      <true/>
+      
+      <!-- USB Hardening (without blocking) -->
+      <key>BlockUSBMount</key>
+      <false/>
+      <key>RemountUSBMode</key>
+      <array>
+        <string>noexec</string>
+        <string>nosuid</string>
+        <string>nodev</string>
+        <string>nobrowse</string>
+      </array>
+      <!-- Force remount existing USB devices on Santa startup with restricted flags -->
+      <key>OnStartUSBOptions</key>
+      <string>ForceRemount</string>
+      
+      <!-- Messages -->
       <key>BlockMessage</key>
       <string>This application has been blocked by Santa security policy.</string>
       <key>BannedUSBBlockMessage</key>
-      <string>This USB device has been blocked by security policy. </string>
+      <string>This USB device has been blocked by security policy.</string>
       <key>RemountUSBBlockMessage</key>
-      <string>This USB device has been remounted with restricted permissions.</string>
+      <string>This USB device has been remounted with restricted permissions (no executables, no setuid, no devices).</string>
       <key>FileAccessBlockMessage</key>
       <string>Access to this file has been blocked by security policy.</string>
+      
+      <!-- Notifications -->
       <key>EnableNotificationSilences</key>
       <false/>
       <key>EnableSilentMode</key>
       <false/>
       <key>EnableSilentTTYMode</key>
       <false/>
+      
+      <!-- Telemetry -->
       <key>Telemetry</key>
       <array>
         <string>Everything</string>
       </array>
-      <key>EnableBadSignatureProtection</key>
-      <true/>
-	  <key>EnablePageZeroProtection</key>
-	  <true/>
-      <key>EnableTransitiveRules</key>
-      <true/>
-	  <key>BlockUSBMount</key>
-	  <false/>
-	  <key>RemountUSBMode</key>
-	  <array>
-	      <string>noexec</string>
-		  <string>rdonly</string>
-	  </array>
-	  <key>EnableSystemExtensionProtection</key>
-	  <true/>
+      
+      <!-- Payload identifiers -->
       <key>PayloadDisplayName</key>
       <string>Santa</string>
       <key>PayloadIdentifier</key>
