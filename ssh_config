@@ -133,7 +133,7 @@ Host *
     # Connection Multiplexing
     # -------------------------------------------------------------------------
     ControlMaster auto
-    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPath ~/.ssh/sockets/%C
     ControlPersist 600
 
     # -------------------------------------------------------------------------
@@ -161,3 +161,5 @@ Host *
     # -------------------------------------------------------------------------
     RequiredRSASize 3072
     SetEnv TERM=xterm-256color
+    ProxyUseFdpass no
+    GSSAPIDelegateCredentials no
