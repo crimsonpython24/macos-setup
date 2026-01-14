@@ -1,0 +1,340 @@
+# /opt/local/etc/dnscrypt-proxy/dnscrypt-proxy.toml
+# Hardened configuration for nation-state threat model
+# Works with Unbound forwarding on 127.0.0.1:54
+
+##############################################
+#        Global settings                     #
+##############################################
+
+# Unbound forwards here
+listen_addresses = ['127.0.0.1:54', '[::1]:54']
+
+# Maximum concurrent client connections
+max_clients = 250
+
+
+##############################################
+#        Server Selection                    #
+##############################################
+
+# Use servers reachable over IPv4 only (IPv6 can leak)
+ipv4_servers = true
+ipv6_servers = false
+
+# DNSCrypt only - better anonymization support than DoH
+dnscrypt_servers = true
+doh_servers = false
+odoh_servers = false
+
+# Server requirements
+require_dnssec = true
+require_nolog = true
+require_nofilter = true
+
+# Disable servers whose operators also run relays we use
+# Critical: server and relay MUST be different entities
+disabled_server_names = [
+    # CleanBrowsing - operates both servers and relays
+    'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
+    'cs-ch', 'cs-berlin', 'cs-belgium', 'cs-brazil', 'cs-czech',
+    'cs-dc', 'cs-dus', 'cs-finland', 'cs-fl', 'cs-ga', 'cs-hungary',
+    'cs-il', 'cs-india', 'cs-la', 'cs-london', 'cs-manchester',
+    'cs-md', 'cs-milan', 'cs-montreal', 'cs-norway', 'cs-nv',
+    'cs-nyc', 'cs-ore', 'cs-poland', 'cs-pt', 'cs-ro', 'cs-sea',
+    'cs-serbia', 'cs-singapore', 'cs-sk', 'cs-swe', 'cs-sydney',
+    'cs-tokyo', 'cs-tx', 'cs-vancouver',
+    # Scaleway - operates both servers and relays
+    'scaleway-fr', 'scaleway-ams',
+    # DNSCrypt.uk - operates both servers and relays
+    'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6',
+    'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
+]
+
+
+##############################################
+#        Connection Settings                 #
+##############################################
+
+# UDP preferred (faster), TCP as fallback
+force_tcp = false
+
+# Disable experimental HTTP/3
+http3 = false
+
+# Increased timeout for relay paths (ms)
+timeout = 5000
+
+# Keep connections alive (seconds)
+keepalive = 60
+
+# Mullvad integration - uncomment if you want DNS through the tunnel
+# proxy = 'socks5://127.0.0.1:1080'
+
+
+##############################################
+#        Load Balancing                      #
+##############################################
+
+# Use fastest 2 servers, randomize between them
+lb_strategy = 'p2'
+
+# Continuously estimate latency
+lb_estimator = true
+
+
+##############################################
+#        Logging (minimal for privacy)       #
+##############################################
+
+# Log level: 0=verbose, 6=fatal only
+log_level = 2
+
+# Use system logger
+use_syslog = true
+
+# Log rotation
+log_files_max_size = 10
+log_files_max_age = 7
+log_files_max_backups = 1
+
+
+##############################################
+#        Certificate Management              #
+##############################################
+
+# How often to refresh DNSCrypt certificates (minutes)
+cert_refresh_delay = 240
+
+# Reject certificates with future timestamps
+cert_ignore_timestamp = false
+
+# Create new key pair for every query (critical for privacy)
+dnscrypt_ephemeral_keys = true
+
+# Disable TLS session tickets (prevents tracking)
+tls_disable_session_tickets = true
+
+
+##############################################
+#        Startup & Network                   #
+##############################################
+
+# Bootstrap resolvers (only used for initial setup, never for actual queries)
+bootstrap_resolvers = ['9.9.9.9:53', '149.112.112.112:53']
+
+# Never fall back to system DNS
+ignore_system_dns = true
+
+# Wait for network at startup (seconds)
+netprobe_timeout = 60
+
+# Address to probe for connectivity
+netprobe_address = '9.9.9.9:53'
+
+
+##############################################
+#        Filters                             #
+##############################################
+
+# Block IPv6 responses (prevents leaks)
+block_ipv6 = true
+
+# Block queries for unqualified names (prevents leaks)
+block_unqualified = true
+
+# Block queries for undelegated zones (prevents leaks)
+block_undelegated = true
+
+# TTL for blocked responses
+reject_ttl = 10
+
+
+##############################################
+#        DNS Cache                           #
+##############################################
+
+cache = true
+cache_size = 4096
+cache_min_ttl = 2400
+cache_max_ttl = 86400
+cache_neg_min_ttl = 60
+cache_neg_max_ttl = 600
+
+
+##############################################
+#        Captive Portals                     #
+##############################################
+
+[captive_portals]
+# Disabled - handle manually if needed
+
+
+##############################################
+#        Local DoH Server                    #
+##############################################
+
+[local_doh]
+# Disabled - not needed with Unbound setup
+
+
+##############################################
+#        Query Logging                       #
+##############################################
+
+[query_log]
+# Disabled for privacy - uncomment only for debugging
+# file = '/var/log/dnscrypt-proxy/query.log'
+format = 'tsv'
+
+
+##############################################
+#        NX Logging                          #
+##############################################
+
+[nx_log]
+# Disabled for privacy
+format = 'tsv'
+
+
+##############################################
+#        Blocklists                          #
+##############################################
+
+# Not needed - using Steven Black hosts in /etc/hosts
+
+[blocked_names]
+# blocked_names_file = 'blocked-names.txt'
+
+[blocked_ips]
+# blocked_ips_file = 'blocked-ips.txt'
+
+[allowed_names]
+# allowed_names_file = 'allowed-names.txt'
+
+[allowed_ips]
+# allowed_ips_file = 'allowed-ips.txt'
+
+
+##############################################
+#        Schedules                           #
+##############################################
+
+[schedules]
+# No time-based restrictions
+
+
+##############################################
+#        Server Sources                      #
+##############################################
+
+[sources]
+
+  [sources.public-resolvers]
+    urls = [
+      'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
+      'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md'
+    ]
+    cache_file = 'public-resolvers.md'
+    minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    refresh_delay = 72
+    prefix = ''
+
+  [sources.relays]
+    urls = [
+      'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
+      'https://download.dnscrypt.info/resolvers-list/v3/relays.md'
+    ]
+    cache_file = 'relays.md'
+    minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    refresh_delay = 72
+    prefix = ''
+
+
+##############################################
+#        Broken Implementations              #
+##############################################
+
+[broken_implementations]
+
+fragments_blocked = [
+    'cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6',
+    'cleanbrowsing-adult', 'cleanbrowsing-family', 'cleanbrowsing-security'
+]
+
+
+##############################################
+#        DoH Client Auth                     #
+##############################################
+
+[doh_client_x509_auth]
+# Not used - DNSCrypt only
+
+
+##############################################
+#        Anonymized DNS                      #
+##############################################
+
+[anonymized_dns]
+
+# Routes queries through relays so servers never see your IP
+# Mix of US relays (low latency from LA) and non-Five-Eyes for diversity
+routes = [
+    { server_name = '*', via = [
+        # US West Coast (low latency)
+        'anon-cs-la',
+        'anon-cs-nv',
+        'anon-cs-sea',
+        'anon-cs-ore',
+        'dnscry.pt-anon-losangeles-ipv4',
+        'dnscry.pt-anon-lasvegas-ipv4',
+        'dnscry.pt-anon-sanjose-ipv4',
+        'dnscry.pt-anon-phoenix-ipv4',
+        # Non-Five-Eyes (jurisdiction diversity)
+        'anon-relay-ch',
+        'anon-relay-nl',
+        'anon-relay-se',
+        'anon-relay-fi',
+        'anon-relay-de'
+    ]}
+]
+
+# Skip incompatible resolvers instead of using them directly
+skip_incompatible = true
+
+# Allow direct cert fetch if relay fails (queries still go through relays)
+direct_cert_fallback = true
+
+
+##############################################
+#        DNS64                               #
+##############################################
+
+[dns64]
+# Disabled - not using NAT64
+
+
+##############################################
+#        IP Encryption                       #
+##############################################
+
+[ip_encryption]
+# Disabled - no logging anyway
+algorithm = "none"
+key = ""
+
+
+##############################################
+#        Monitoring UI                       #
+##############################################
+
+[monitoring_ui]
+# Disabled - reduces attack surface
+enabled = false
+
+
+##############################################
+#        Static Entries                      #
+##############################################
+
+[static]
+# No custom servers
