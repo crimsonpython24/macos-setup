@@ -1,416 +1,161 @@
 # ~/.ssh/config - Hardened SSH Client Configuration
-
 # Based on: sshaudit.com (Oct 2024), drduh/config, Mozilla OpenSSH Guidelines
-
 # For: macOS outgoing connections only (no sshd)
-
 #
-
-# IMPORTANT: More specific Host blocks must come BEFORE the wildcard Host \* block
-
+# IMPORTANT: More specific Host blocks must come BEFORE the wildcard Host * block
 # because SSH uses the first matching value for each parameter.
 
-#
-
 # =============================================================================
-
-# OPTIONAL: GPG AGENT FOR SSH (for YubiKey / hardware key users)
-
-# =============================================================================
-
-# If you want GPG to manage SSH keys (e.g., with YubiKey), do the following:
-
-#
-
-# 1. Add to ~/.zshrc or ~/.bashrc:
-
-# export GPG_TTY=$(tty)
-
-# export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
-
-# gpgconf --launch gpg-agent
-
-#
-
-# 2. Create/edit ~/.gnupg/gpg-agent.conf:
-
-# enable-ssh-support
-
-# default-cache-ttl 600
-
-# max-cache-ttl 7200
-
-# pinentry-program /opt/local/bin/pinentry-mac
-
-#
-
-# 3. Comment out "AddKeysToAgent" and "UseKeychain" below (they conflict).
-
-# =============================================================================
-
-# =============================================================================
-
 # HOST-SPECIFIC CONFIGURATIONS
-
 # =============================================================================
 
-# Add your custom hosts here. Examples:
-
-#Host myserver
-
-# HostName 192.168.1.100
-
-# Port 22
-
-# User myuser
-
-# IdentityFile ~/.ssh/myserver_ed25519
-
-# IdentitiesOnly yes
-
-#Host router
-
-# HostName 192.168.1.1
-
-# Port 2222
-
-# User admin
-
-# IdentityFile ~/.ssh/router_ed25519
-
-# IdentitiesOnly yes
+# Examples (uncomment and modify as needed):
+#
+# Host myserver
+#     HostName 192.168.1.100
+#     Port 22
+#     User myuser
+#     IdentityFile ~/.ssh/myserver_ed25519
+#
+# Host router
+#     HostName 192.168.1.1
+#     Port 2222
+#     User admin
+#     IdentityFile ~/.ssh/router_ed25519
 
 # -----------------------------------------------------------------------------
-
 # Git Hosting Services
-
 # -----------------------------------------------------------------------------
-
-# These services have specific requirements, so we configure them separately.
-
-# ControlMaster disabled to avoid issues with git operations.
 
 Host gitlab.com
-User git
-HostName gitlab.com
-IdentityFile ~/.ssh/gitlab_ed25519
-IdentitiesOnly yes
-ControlMaster no
-
-# GitLab supports modern MACs
-
-MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
+    User git
+    HostName gitlab.com
+    IdentityFile ~/.ssh/gitlab_ed25519
+    IdentitiesOnly yes
+    ControlMaster no
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
 
 Host github.com
-User git
-HostName github.com
-IdentityFile ~/.ssh/github_ed25519
-IdentitiesOnly yes
-ControlMaster no
-
-# GitHub requires slightly broader MAC support
-
-MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
-
-# Optional: Separate GitHub keys per organization/project
-
-#Host github-work
-
-# HostName github.com
-
-# User git
-
-# IdentityFile ~/.ssh/github_work_ed25519
-
-# IdentitiesOnly yes
-
-# ControlMaster no
+    User git
+    HostName github.com
+    IdentityFile ~/.ssh/github_ed25519
+    IdentitiesOnly yes
+    ControlMaster no
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
 
 # =============================================================================
-
-# GLOBAL DEFAULTS (Host \*)
-
+# GLOBAL DEFAULTS
 # =============================================================================
 
-# These settings apply to ALL hosts unless overridden above.
-
-Host \*
-
-# ---------------------------------------------------------------------------
-
-# macOS KEYCHAIN INTEGRATION
-
-# ---------------------------------------------------------------------------
-
-# Automatically add keys to ssh-agent when used
-
-AddKeysToAgent yes
-
-# Store passphrases in macOS Keychain (no need to re-enter after reboot)
-
-UseKeychain yes
-
-# ---------------------------------------------------------------------------
-
-# PROTOCOL & ADDRESS
-
-# ---------------------------------------------------------------------------
-
-# Use IPv4 only (more predictable, avoids IPv6 leaks on some networks)
-
-AddressFamily inet
-
-# ---------------------------------------------------------------------------
-
-# CRYPTOGRAPHIC ALGORITHMS (CRITICAL SECURITY SETTINGS)
-
-# ---------------------------------------------------------------------------
-
-# Order matters: most preferred first. Updated Oct 2024 with post-quantum
-
-# considerations (256-bit AES prioritized for quantum resistance).
-
-# Key Exchange: Post-quantum hybrid (sntrup761) first, then curve25519
-
-# Avoids NIST curves (potential backdoor concerns) where possible
-
-KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256
-
-# Ciphers: ChaCha20 for performance, then AES-256 variants for quantum resistance
-
-Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-gcm@openssh.com,aes128-ctr
-
-# MACs: ETM (Encrypt-then-MAC) variants only - more secure than MAC-then-encrypt
-
-# SHA2-512 first for better quantum resistance
-
-MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
-
-# Host Key Algorithms: Ed25519 preferred (fast, secure), then RSA-SHA2
-
-# sk-\* variants are for hardware security keys (FIDO2/U2F)
-
-HostKeyAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
-
-# Pubkey algorithms we accept for authentication
-
-PubkeyAcceptedAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
-
-# CA Signature Algorithms (for certificate-based auth)
-
-CASignatureAlgorithms sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256
-
-# ---------------------------------------------------------------------------
-
-# AUTHENTICATION SETTINGS
-
-# ---------------------------------------------------------------------------
-
-# Enable public key authentication
-
-PubkeyAuthentication yes
-
-# Disable password authentication - keys only
-
-PasswordAuthentication no
-
-# Disable keyboard-interactive (another password-based method)
-
-KbdInteractiveAuthentication no
-
-# Disable challenge-response authentication
-
-ChallengeResponseAuthentication no
-
-# Disable host-based authentication
-
-HostbasedAuthentication no
-
-# Disable GSSAPI authentication (Kerberos)
-
-GSSAPIAuthentication no
-
-# Prefer publickey authentication
-
-PreferredAuthentications publickey
-
-# Only use identity files explicitly specified (security best practice)
-
-IdentitiesOnly yes
-
-# ---------------------------------------------------------------------------
-
-# SECURITY: AGENT & X11 FORWARDING
-
-# ---------------------------------------------------------------------------
-
-# NEVER forward your SSH agent by default - this is a significant security risk.
-
-# If an attacker compromises the remote host, they can use your forwarded agent
-
-# to authenticate to other systems. Enable per-host only when absolutely needed.
-
-ForwardAgent no
-
-# Disable X11 forwarding (attack surface reduction)
-
-ForwardX11 no
-ForwardX11Trusted no
-
-# Prevent local command execution
-
-PermitLocalCommand no
-
-# ---------------------------------------------------------------------------
-
-# HOST KEY VERIFICATION
-
-# ---------------------------------------------------------------------------
-
-# Ask before adding new host keys, reject changed keys (prevents MITM)
-
-# Options: yes (reject new), ask (prompt), accept-new (auto-add new, reject changed)
-
-StrictHostKeyChecking ask
-
-# Verify host keys via DNS SSHFP records when available
-
-VerifyHostKeyDNS yes
-
-# Check that the host IP hasn't changed (DNS spoofing protection)
-
-CheckHostIP yes
-
-# Use SHA256 for fingerprint display (more secure than MD5)
-
-FingerprintHash sha256
-
-# Update host keys automatically when server rotates them (OpenSSH 6.8+)
-
-UpdateHostKeys yes
-
-# ---------------------------------------------------------------------------
-
-# PRIVACY & ANONYMITY
-
-# ---------------------------------------------------------------------------
-
-# Hash hostnames and addresses in known_hosts
-
-# If your known_hosts is leaked, attackers can't easily see which servers you access
-
-HashKnownHosts yes
-
-# Show visual ASCII art fingerprint on connection (helps notice changes)
-
-VisualHostKey yes
-
-# ---------------------------------------------------------------------------
-
-# HOSTNAME CANONICALIZATION
-
-# ---------------------------------------------------------------------------
-
-# Canonicalize hostname for better host key verification
-
-CanonicalizeHostname yes
-CanonicalizeFallbackLocal yes
-
-# Optional: Add your domains for better canonicalization
-
-# CanonicalizeDomains example.com
-
-# ---------------------------------------------------------------------------
-
-# CONNECTION KEEPALIVE
-
-# ---------------------------------------------------------------------------
-
-# Send keepalive every 60 seconds (prevents connection drops on NAT/firewalls)
-
-ServerAliveInterval 60
-
-# Disconnect after 3 missed keepalives (3 minutes of unresponsiveness)
-
-ServerAliveCountMax 3
-
-# ---------------------------------------------------------------------------
-
-# CONNECTION MULTIPLEXING
-
-# ---------------------------------------------------------------------------
-
-# Reuses a single TCP connection for multiple SSH sessions to the same host.
-
-# Speeds up subsequent connections significantly.
-
-# Check active: ls -la ~/.ssh/sockets/
-
-# Close manually: ssh -O exit user@server.com
-
-ControlMaster auto
-ControlPath ~/.ssh/sockets/%r@%h-%p
-ControlPersist 600
-
-# ---------------------------------------------------------------------------
-
-# FORWARD SECRECY & ENCRYPTION
-
-# ---------------------------------------------------------------------------
-
-# Force rekeying for perfect forward secrecy (every 1GB of data or 1 hour)
-
-RekeyLimit 1G 1h
-
-# ---------------------------------------------------------------------------
-
-# NETWORK & PERFORMANCE
-
-# ---------------------------------------------------------------------------
-
-# Disable compression (negligible benefit on modern networks, potential security risk)
-
-Compression no
-
-# Quality of Service markers for better network performance
-
-IPQoS af21 cs1
-
-# Connection timeout (seconds) - fail fast on unreachable hosts
-
-ConnectTimeout 30
-
-# Exit if port forwarding fails (security for forwarded connections)
-
-ExitOnForwardFailure yes
-
-# Clean up socket files when done
-
-StreamLocalBindUnlink yes
-
-# ---------------------------------------------------------------------------
-
-# LOGGING & DEBUGGING
-
-# ---------------------------------------------------------------------------
-
-# Log verbosity (INFO for audit trail, DEBUG for troubleshooting)
-
-LogLevel INFO
-
-# Number of password prompts (irrelevant if PasswordAuthentication is no)
-
-NumberOfPasswordPrompts 0
-
-# Require minimum RSA key size (OpenSSH 9.1+)
-
-RequiredRSASize 3072
-
-# Restrict host-based accepted algorithms
-
-HostbasedAcceptedAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256
-
-# Prevent SSH from using environment variables from server
-
-SetEnv TERM=xterm-256color
-PermitRemoteOpen none
+Host *
+    # -------------------------------------------------------------------------
+    # macOS Keychain Integration
+    # -------------------------------------------------------------------------
+    AddKeysToAgent yes
+    UseKeychain yes
+
+    # -------------------------------------------------------------------------
+    # Protocol & Address
+    # -------------------------------------------------------------------------
+    AddressFamily inet
+
+    # -------------------------------------------------------------------------
+    # Cryptographic Algorithms
+    # -------------------------------------------------------------------------
+    # Key Exchange: Post-quantum hybrid first, then curve25519
+    KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256
+
+    # Ciphers: ChaCha20 for performance, AES-256 for quantum resistance
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-gcm@openssh.com,aes128-ctr
+
+    # MACs: ETM variants only
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
+
+    # Host Key Algorithms: Ed25519 preferred, then RSA-SHA2
+    HostKeyAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
+
+    # Pubkey algorithms for authentication
+    PubkeyAcceptedAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
+
+    # CA Signature Algorithms
+    CASignatureAlgorithms sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256
+
+    # -------------------------------------------------------------------------
+    # Authentication
+    # -------------------------------------------------------------------------
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    ChallengeResponseAuthentication no
+    HostbasedAuthentication no
+    GSSAPIAuthentication no
+    PreferredAuthentications publickey
+    IdentitiesOnly yes
+
+    # -------------------------------------------------------------------------
+    # Security: Forwarding
+    # -------------------------------------------------------------------------
+    ForwardAgent no
+    ForwardX11 no
+    ForwardX11Trusted no
+    PermitLocalCommand no
+
+    # -------------------------------------------------------------------------
+    # Host Key Verification
+    # -------------------------------------------------------------------------
+    StrictHostKeyChecking ask
+    VerifyHostKeyDNS yes
+    CheckHostIP yes
+    FingerprintHash sha256
+    UpdateHostKeys yes
+
+    # -------------------------------------------------------------------------
+    # Privacy
+    # -------------------------------------------------------------------------
+    HashKnownHosts yes
+    VisualHostKey yes
+
+    # -------------------------------------------------------------------------
+    # Hostname Canonicalization
+    # -------------------------------------------------------------------------
+    CanonicalizeHostname yes
+    CanonicalizeFallbackLocal yes
+
+    # -------------------------------------------------------------------------
+    # Connection Keepalive
+    # -------------------------------------------------------------------------
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+    # -------------------------------------------------------------------------
+    # Connection Multiplexing
+    # -------------------------------------------------------------------------
+    ControlMaster auto
+    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPersist 600
+
+    # -------------------------------------------------------------------------
+    # Forward Secrecy
+    # -------------------------------------------------------------------------
+    RekeyLimit 1G 1h
+
+    # -------------------------------------------------------------------------
+    # Network & Performance
+    # -------------------------------------------------------------------------
+    Compression no
+    IPQoS af21 cs1
+    ConnectTimeout 30
+    ExitOnForwardFailure yes
+    StreamLocalBindUnlink yes
+
+    # -------------------------------------------------------------------------
+    # Logging
+    # -------------------------------------------------------------------------
+    LogLevel INFO
+    NumberOfPasswordPrompts 0
+
+    # -------------------------------------------------------------------------
+    # Additional Hardening
+    # -------------------------------------------------------------------------
+    RequiredRSASize 3072
+    SetEnv TERM=xterm-256color
