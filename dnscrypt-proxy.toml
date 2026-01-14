@@ -136,8 +136,8 @@ netprobe_address = '9.9.9.9:53'
 #        Filters                             #
 ##############################################
 
-# Block IPv6 responses (prevents leaks)
-block_ipv6 = true
+# Don't block IPv6 responses (your original setting)
+block_ipv6 = false
 
 # Block queries for unqualified names (prevents leaks)
 block_unqualified = true
@@ -276,11 +276,9 @@ fragments_blocked = [
 
 [anonymized_dns]
 
-# Routes queries through relays so servers never see your IP
-# Mix of US relays (low latency from LA) and non-Five-Eyes for diversity
+# Your original working relay configuration
 routes = [
     { server_name = '*', via = [
-        # US West Coast (low latency)
         'anon-cs-la',
         'anon-cs-nv',
         'anon-cs-sea',
@@ -288,20 +286,14 @@ routes = [
         'dnscry.pt-anon-losangeles-ipv4',
         'dnscry.pt-anon-lasvegas-ipv4',
         'dnscry.pt-anon-sanjose-ipv4',
-        'dnscry.pt-anon-phoenix-ipv4',
-        # Non-Five-Eyes (jurisdiction diversity)
-        'anon-relay-ch',
-        'anon-relay-nl',
-        'anon-relay-se',
-        'anon-relay-fi',
-        'anon-relay-de'
+        'dnscry.pt-anon-phoenix-ipv4'
     ]}
 ]
 
-# Skip incompatible resolvers instead of using them directly
-skip_incompatible = true
+# Your original setting - allows incompatible servers with direct fallback
+skip_incompatible = false
 
-# Allow direct cert fetch if relay fails (queries still go through relays)
+# Allow direct cert fetch if relay fails
 direct_cert_fallback = true
 
 
