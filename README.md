@@ -20,36 +20,21 @@ Total time needed (from empty system): 70-90 mins, depending on Internet connect
  - Terminal
    - Ensure that [Secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) is enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
-   - [Prevent](https://github.com/sunknudsen/guides/tree/main/archive/how-to-protect-mac-computers-from-cold-boot-attacks) cold-boot attacks
+   - Implement some more hardware hardening:
 ```zsh
+# Cold boot attacks
 sudo pmset -a destroyfvkeyonstandby 1 hibernatemode 25 standbydelaylow 0 standbydelayhigh 0
-```
- - Implement some more hardware safety nets:
-```zsh
+
 # Disable hibernation (writes RAM to disk)
 sudo pmset -a hibernatemode 0
 sudo pmset -a standby 0
 sudo pmset -a autopoweroff 0
 
-# Remove existing sleepimage
-sudo rm -f /var/vm/sleepimage
-
-# Create a zero-byte immutable file to prevent recreation
-sudo touch /var/vm/sleepimage
-sudo chflags schg /var/vm/sleepimage
-
 # Disable sudden motion sensor (prevents some RAM dumps)
 sudo pmset -a sms 0
-```
-```zsh
+
 # Reduce unified log retention
 sudo log config --mode "level:off" --subsystem com.apple.diagnosticd
-
-# Disable metadata server (Spotlight forensic artifacts)
-sudo mdutil -a -i off
-
-# If you don't need Spotlight at all:
-sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.metadata.mds.plist 2>/dev/null
 ```
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
