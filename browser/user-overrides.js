@@ -51,7 +51,6 @@ user_pref("device.sensors.enabled", false);
 user_pref("media.gmp-provider.enabled", false);
 
 /*** MISCELLANEOUS ***/
-user_pref("permissions.default.shortcuts", 2);
 user_pref("privacy.antitracking.isolateContentScriptResources", true);
 
 /*** ETP ***/
