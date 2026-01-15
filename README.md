@@ -303,7 +303,11 @@ santactl fileinfo /System/Applications/Dictionary.app
 sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
 # Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 ```
- 7. When importing/exporting rules, use:
+ 7. Certain files should be blocked by the FAA policy, e.g.,
+```zsh
+cat ~/.ssh/github_ed25519
+```
+ 8. When importing/exporting rules, use:
 ```zsh
 sudo santactl rule --export santa1.json
 ```
