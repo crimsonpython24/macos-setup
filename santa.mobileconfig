@@ -29,7 +29,7 @@
       <key>EnableSystemExtensionProtection</key>
       <true/>
       
-      <!-- USB Hardening (without blocking) -->
+      <!-- USB Hardening -->
       <key>BlockUSBMount</key>
       <false/>
       <key>RemountUSBMode</key>
@@ -37,11 +37,15 @@
         <string>noexec</string>
         <string>nosuid</string>
         <string>nodev</string>
-        <string>nobrowse</string>
       </array>
-      <!-- Force remount existing USB devices on Santa startup with restricted flags -->
       <key>OnStartUSBOptions</key>
       <string>ForceRemount</string>
+      
+      <!-- File Access Authorization -->
+      <key>FileAccessPolicyPlist</key>
+      <string>/var/db/santa/faa_policy.plist</string>
+      <key>FileAccessPolicyUpdateIntervalSec</key>
+      <integer>300</integer>
       
       <!-- Messages -->
       <key>BlockMessage</key>
@@ -49,9 +53,9 @@
       <key>BannedUSBBlockMessage</key>
       <string>This USB device has been blocked by security policy.</string>
       <key>RemountUSBBlockMessage</key>
-      <string>This USB device has been remounted with restricted permissions (no executables, no setuid, no devices).</string>
+      <string>This USB device has been remounted with restricted permissions.</string>
       <key>FileAccessBlockMessage</key>
-      <string>Access to this file has been blocked by security policy.</string>
+      <string>File access blocked by security policy.</string>
       
       <!-- Notifications -->
       <key>EnableNotificationSilences</key>
