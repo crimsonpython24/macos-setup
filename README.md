@@ -41,7 +41,7 @@ sudo sysctl -w kern.sugid_coredump=0
 # Randomize MAC on each connection
 sudo ifconfig en0 ether $(openssl rand -hex 6 | sed 's/\(..\)/\1:/g; s/.$//')
 
-# Secure virtual memory (add to your guide)
+# Secure virtual memory
 sudo defaults write /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap -bool YES
 
 # Verify
@@ -92,11 +92,10 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
     - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
-    - Also copy the Unbound [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf) beforehand.
+    - Also copy the Unbound [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) and [DNSCrypt config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/dnscrypt-proxy.toml) beforehand.
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
- 3. Replace the configuration file with [the hardened version](https://github.com/crimsonpython24/macos-setup/blob/master/dnscrypt-proxy.toml).
- 4. Edit the property list to give DNSCrypt startup access:
+ 3. Edit the property list to give DNSCrypt startup access:
 ```zsh
 sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dnscrypt-proxy.plist
 ```
@@ -128,13 +127,13 @@ sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dn
   </dict>
 </plist>
 ```
- 5. Load the proxy:
+ 4. Load the proxy:
 ```zsh
 sudo launchctl enable system/org.macports.dnscrypt-proxy
 sudo port unload dnscrypt-proxy
 sudo port load dnscrypt-proxy
 ```
- 6. Check if current configuration is valid (will not run otherwise):
+ 5. Check if current configuration is valid (will not run otherwise):
 ```zsh
 sudo /opt/local/sbin/dnscrypt-proxy -config /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml -check
 # Remember to reload dnscrypt-proxy after toml change
@@ -147,7 +146,7 @@ sudo lsof +c 15 -Pni UDP:54
 # dnscrypt-proxy 57409 root    7u  IPv4 0xf2ce17b711151ccc      0t0  UDP 127.0.0.1:54
 # dnscrypt-proxy 57409 root    9u  IPv6 0x8031285518513383      0t0  UDP [::1]:54
 ```
- 7. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
+ 6. After changing the network DNS resolver to use local, ensure that Wi-Fi interfaces use `127.0.0.1` instead of `192.168.x.x`:
 ```zsh
 # Sometimes system will not respect GUI settings
 sudo networksetup -setdnsservers "Wi-Fi" 127.0.0.1
@@ -158,7 +157,7 @@ networksetup -getdnsservers "Wi-Fi"
 scutil --dns | head -10
 # nameserver[0] : 127.0.0.1
 ```
- 8. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
+ 7. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
 
 **Note** dnscrypt-proxy will take ~30 seconds to load on startup, so there might not be connection immediately after session login.
 
@@ -166,7 +165,7 @@ scutil --dns | head -10
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
  1. Unbound should already be installed in 2(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/unbound.conf)] stored somewhere from 2(B) into Unbound:
+ 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf)] stored somewhere from 2(B) into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
 # Edit file
@@ -265,13 +264,21 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 ```zsh
 sudo santactl doctor
 ```
- 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because NIST configurations block adding new profiles.
+ 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because NIST configurations block adding new profiles.
 ```zsh
 vi santa.mobileconfig
 # Edit file
 sudo open santa.mobileconfig
 ```
- 5. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/santa_base.json)):
+ 5. Add in Santa's [FAA policy](https://github.com/crimsonpython24/macos-setup/blob/master/policies/faa_policy.plist):
+```zsh
+sudo mkdir -p /var/db/santa
+sudo vi /var/db/santa/faa_policy.plist
+
+sudo chmod 644 /var/db/santa/faa_policy.plist
+sudo chown root:wheel /var/db/santa/faa_policy.plist
+```
+ 6. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa_base.json)):
 ```zsh
 santactl fileinfo /System/Applications/Dictionary.app 
 # Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
@@ -296,7 +303,7 @@ santactl fileinfo /System/Applications/Dictionary.app
 sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
 # Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 ```
- 6. When importing/exporting rules, use:
+ 7. When importing/exporting rules, use:
 ```zsh
 sudo santactl rule --export santa1.json
 ```
@@ -306,7 +313,7 @@ Important: the security compliance project does **not** modify any system behavi
 
  > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
 
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
 ```zsh
 cd build
 mkdir baselines && cd baselines
@@ -482,7 +489,7 @@ which gpg
 ```
  6. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
 
-**Note** when using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/user-overrides.js) in this repo.
+**Note** when using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
 
 ## 5-1. Installing Security Applications
 
@@ -514,7 +521,7 @@ sudo chpass -s /opt/local/bin/fish warren
 fish_add_path /opt/local/bin
 fish_add_path /opt/local/sbin
 ```
- 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/Basic%202.terminal).
+ 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/shell/Basic%202.terminal) (there is nothing special about this terminal config, they are simply personal prefs).
  5. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
     - [jethrokuan/z](https://github.com/jethrokuan/z)
     - [PatrickF1/fzf.fish](https://github.com/PatrickF1/fzf.fish) -- depends on `sudo port install fzf fd bat`
@@ -558,7 +565,7 @@ end
  9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations†](https://github.com/cpy24/iterm-setup)
 
 ### A) SSH Configuration
- 1. Install new configuration from [ssh-config](https://github.com/crimsonpython24/macos-setup/blob/master/ssh_config):
+ 1. Install new configuration from [ssh-config](https://github.com/crimsonpython24/macos-setup/blob/master/shell/ssh_config):
 ```fish
 mkdir ~/.ssh
 vi ~/.ssh/config
@@ -597,7 +604,7 @@ ssh -T git@github.com
 cat ~/.ssh/known_hosts
 # |1|qN7XE853AcGGBmJDT/APv+AiZGU=|qq21+AC5OMD...
 ```
- 8. Run the [test script](https://github.com/crimsonpython24/macos-setup/blob/master/ssh_test.sh) to verify that SSH settings are applied.
+ 8. Run the [test script](https://github.com/crimsonpython24/macos-setup/blob/master/shell/ssh_test.sh) to verify that SSH settings are applied.
 
 **Note** If legacy SSH servers are not working, use the following configuration:
 ```fish
