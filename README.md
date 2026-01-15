@@ -3,20 +3,14 @@
 Total time needed (from empty system): 70-90 mins, depending on Internet connection
 
 ## 0. Basics
-### Administrative Account ("Admin")
-#### Principles
  - `launchd` should not be modified like `systemctl` as the former is not designed for user tweaks
    - This rule also applies to "UI skins," custom plugins, etc. since they might break with future updates
    - I.e., one should not change any obscure settings (e.g., `defaults write com.apple.something`) unless they know exactly what they are doing
-
-#### App Installation Guidelines
  - Do not use the admin account besides initializing the machine
  - Do not install any apps as Admin unless necessary, as some should run just fine outside the root directory (e.g. `/Users/warren/Applications`)
    - Said apps will prompt for password if they need privilege escalations regardless, and it is up to one to decide whether to escalate its privilege (install in `/Applications`) or find an alternative.
    - Do not move pre-/auto-installed macOS apps around in Finder, because future updates might break those modifications
  - Only make system-wide configurations (e.g., network interface) or run services such as ClamAV and Santa in Admin; for things like gpg keys, set up in individual users
- 
-### Extra Checklist
  - Terminal
    - Ensure that [Secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) is enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
@@ -54,8 +48,7 @@ sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser 2>
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
    - Avoid [Parallels VM](https://jhftss.github.io/Parallels-0-day/), [Electron-based](https://redfoxsecurity.medium.com/hacking-electron-apps-security-risks-and-how-to-protect-your-application-9846518aa0c0) applications (see a full list [here](https://www.electronjs.org/apps)), and apps needing [Rosetta](https://cyberinsider.com/apples-rosetta-2-exploited-for-bypassing-macos-security-protections/) translation
 
-### Note
-This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party or three-letter-agencies surveillance. 
+**Note** This guide reflects the "secure, not private" concept in that, although these settings make the OS more secure than the shipped or reinstalled version, this does **not** guarantee privacy from first-party or three-letter-agencies surveillance. 
 
 <sup>https://taoofmac.com/space/howto/switch#best-practices</sup><br/>
 <sup>https://news.ycombinator.com/item?id=31864974</sup><br/>
@@ -159,7 +152,7 @@ scutil --dns | head -10
 ```
  7. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
 
-**Note** dnscrypt-proxy will take ~30 seconds to load on startup, so there might not be connection immediately after session login.
+**Note** dnscrypt-proxy will take ~15 seconds to load on startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
 > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
@@ -434,14 +427,14 @@ sudo fdesetup status
     - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
  17. The script should yield 100% compliance by running option 2, then option 1.
 
-**Note** restart the device at this point. Congrats!
+**Note** Restart the device at this point.
 
-**Note** if unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
+**Note** If unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
 ## 5. Application Install
 > Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
 
-> If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
+> Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
 
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
@@ -493,11 +486,9 @@ which gpg
 ```
  6. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
 
-**Note** when using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
+**Note** When using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
 
-## 5-1. Installing Security Applications
-
-Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
+**Note** If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
 ## 6. Fish Shell
 
