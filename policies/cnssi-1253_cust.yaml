@@ -128,7 +128,6 @@ profile:
       - os_writing_tools_disable
       - os_mobile_file_integrity_enable
       - os_sudo_timeout_configure
-      - os_world_writable_library_folder_configure
       - os_world_writable_system_folder_configure
       - os_terminal_secure_keyboard_enable
       - os_dictation_disable
