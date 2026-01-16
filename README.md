@@ -48,14 +48,15 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. CLI Tools
-
- > This tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if testing path or commands in that user.
+ > Until section 7, this tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if testing path or commands in that user.
 
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion.
  - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php).
 
 ## 2. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
+
+ > Remember to create the non-privileged user first to ensure sections 2-4 also apply to it without having to double-check later.
 
  1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works.
  2. Add MacPorts to warren's shells:
@@ -73,17 +74,17 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
 ```
 
 ### B) DNSCrypt
-> Some VPN applications override DNS settings on connect; may need to reconfigure VPN and make it use the local DNS server (change DNS to 127.0.0.1).
-> No need to configure DNSSEC in this step; it will be handled with Unbound.
+ > Some VPN applications override DNS settings on connect; may need to reconfigure VPN and make it use the local DNS server (change DNS to 127.0.0.1).
+ > No need to configure DNSSEC in this step; it will be handled with Unbound.
 
  1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
     - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
-    - Also copy the Unbound [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) and [DNSCrypt config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/dnscrypt-proxy.toml) beforehand.
+    - Also copy the [DNSCrypt config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/dnscrypt-proxy.toml) and [Unbound config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) beforehand.
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
 ```zsh
 /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
-# Edit file
+# Paste content
 ```
  3. Edit the property list to give DNSCrypt startup access:
 ```zsh
@@ -149,16 +150,16 @@ scutil --dns | head -10
 ```
  7. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
 
-**Note** dnscrypt-proxy will take ~15 seconds to load on startup, so there might not be connection immediately after session login.
+**Note** `dnscrypt-proxy` will take ~15 seconds to load on startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
-> The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
+ > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
  1. Unbound should already be installed in 2(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations [[Example](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf)] stored somewhere from 2(B) into Unbound:
+ 2. Copy the configurations stored from 2(B) ([here](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) once again)into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
-# Edit file
+# Paste content
 ```
  3. Initialize root trust anchor for DNSSEC.
 ```zsh
@@ -244,7 +245,7 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 <sup>https://wiki.archlinux.org/title/Unbound</sup>
 
 ## 3. Santa Setup
- 1. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases)
+ 1. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases).
  2. Grant permissions:
     - "Login Items & Extensions" > "App Background Activity" add Santa.app
     - "Login Items & Extensions" > "Extensions" > "By App" > toggle "Santa"
@@ -254,21 +255,23 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 ```zsh
 sudo santactl doctor
 ```
- 4. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 3) because NIST configurations block adding new profiles.
-```zsh
-vi santa.mobileconfig
-# Edit file
-sudo open santa.mobileconfig
-```
- 5. Add in Santa's [FAA policy](https://github.com/crimsonpython24/macos-setup/blob/master/policies/faa_policy.plist):
+ 4. Add a custom [FAA policy](https://github.com/crimsonpython24/macos-setup/blob/master/policies/faa_policy.plist):
 ```zsh
 sudo mkdir -p /var/db/santa
 sudo vi /var/db/santa/faa_policy.plist
+# Paste content
 
 sudo chmod 644 /var/db/santa/faa_policy.plist
 sudo chown root:wheel /var/db/santa/faa_policy.plist
 ```
- 6. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa_base.json)):
+ 5. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 4) because NIST configurations block adding new profiles.
+```zsh
+vi santa.mobileconfig
+# Paste content
+
+sudo open santa.mobileconfig
+```
+ 6. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/policies/prefs/santa_base.json)):
 ```zsh
 santactl fileinfo /System/Applications/Dictionary.app 
 # Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
@@ -293,8 +296,9 @@ santactl fileinfo /System/Applications/Dictionary.app
 sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
 # Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 ```
- 7. Certain files should be blocked by the FAA policy, e.g.,
+ 7. Certain files should be blocked by the FAA policy (because they should be immutable after initialization), e.g.,
 ```zsh
+# Will be created in section 7
 cat ~/.ssh/github_ed25519
 ```
  8. When importing/exporting rules, use:
@@ -303,15 +307,17 @@ sudo santactl rule --export santa1.json
 ```
 
 ## 4. mSCP Setup
-Important: the security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
+ > [!IMPORTANT]
+ > The NIST security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
 
  > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
 
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines). Store the YAML file inside `macos_security-main/build/baselines`.
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
 ```zsh
 cd build
 mkdir baselines && cd baselines
 vi cnssi-1253_cust.yaml
+# Paste content
 ```
  2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
  3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip.
@@ -385,7 +391,7 @@ python3 scripts/generate_guidance.py \
         -p \
     build/baselines/cnssi-1253_cust.yaml
 ```
- 7. If there is a previous profile installed, remove it in Settings first. Run the compliance script.
+ 7. If there is a previous configuration profile installed, remove it in Settings.app first. Run the compliance script.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
@@ -430,12 +436,12 @@ sudo fdesetup status
 
 ## 5. AIDE Setup
  1. Install AIDE via MacPorts: `sudo port install aide`; note the post-install message about configuration location: `/opt/local/etc/aide/aide.conf`.
- 2. Edit [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
+ 2. Edit the [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
 ```zsh
 sudo vi /opt/local/etc/aide/aide.conf
 # Paste content
 ```
- 3. Initialize database.
+ 3. Initialize database:
 ```zsh
 sudo aide --init -L info
 #    INFO: read new entries from disk (limit: '(none)', root prefix: '')
@@ -446,7 +452,7 @@ sudo aide --init -L info
 # Number of entries:	~200000
 # End timestamp: ... (run time 0m 15-30s)
 ```
- 4. Move database into history directory & verify database.
+ 4. Move database into history directory & verify database:
 ```zsh
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 
@@ -491,7 +497,7 @@ sudo aide --check
 ls -la /opt/local/var/lib/aide/aide.db
 # -rw------- root admin
 ```
- 7. Cleanup.
+ 7. Cleanup after testing for the next manual/on-demand scan.
 ```bash
 sudo rm /Library/LaunchAgents/com.test.aide.plist
 sudo aide --update
@@ -527,9 +533,12 @@ sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 | Santa config | `/var/db/santa` | Security tool tampering |
 
 ## 6. Application Install
-> Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
+ > Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
 
-> Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
+ > Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
+
+ > [!NOTE]
+ > Although this section applies to `warren`, it is more convenient to run the script inside `admin` because `warren` is not in the sudoers group (and hence cannot run `sudo` commands), and `admin` cannot read/write warren's files because `admin` is not `root`. This is the same note as in section 1.
 
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
@@ -572,22 +581,24 @@ ls -led /Library/StartupItems
 ```zsh
 sudo chmod -a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" /Library/LaunchAgents
 ```
- 5. If any applications are curl'd through Git, use GnuPG instead of gpg:
+ 5. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
+
+### GnuPG
+If any applications are curl'd through Git, use GnuPG instead of gpg:
 ```zsh
 sudo port install gnupg2
 sudo port load openldap
 which gpg
 # /opt/local/bin/gpg
 ```
- 6. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
+And make sure to configure it as in [section 7(B)](https://github.com/crimsonpython24/macos-setup?tab=readme-ov-file#b-gpg-configuration).
 
-**Note** When using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
-
-**Note** If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
+### Firefox
+ - When using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
+ - If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
 ## 7. Fish Shell
-
-> For this section, running in warren's GUI is easier (keep zsh as default for admin since that account should not be used besides global settings). Obviously `su - admin` when escalation is needed.
+ > For this section, running in warren's GUI is easier (keep zsh as default for admin since that account should not be used besides global settings). Obviously `su - admin` when escalation is needed.
 
  1. First change the hostname:
 ```zsh
@@ -611,7 +622,7 @@ sudo chpass -s /opt/local/bin/fish warren
 fish_add_path /opt/local/bin
 fish_add_path /opt/local/sbin
 ```
- 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/shell/Basic%202.terminal) (there is nothing special about this terminal config, they are simply personal prefs).
+ 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/default.terminal) (there is nothing special about this terminal config, they are simply personal prefs).
  5. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
     - [jethrokuan/z](https://github.com/jethrokuan/z)
     - [PatrickF1/fzf.fish](https://github.com/PatrickF1/fzf.fish) -- depends on `sudo port install fzf fd bat`
@@ -701,6 +712,13 @@ cat ~/.ssh/known_hosts
 # |1|qN7XE853AcGGBmJDT/APv+AiZGU=|qq21+AC5OMD...
 ```
  8. Run the [test script](https://github.com/crimsonpython24/macos-setup/blob/master/shell/ssh_test.sh) to verify that SSH settings are applied.
+```fish
+vi ssh_test.sh
+# Paste content
+
+chmod +x ssh_test.sh 
+./ssh_test.sh
+```
 
 **Note** If legacy SSH servers are not working, use the following configuration:
 ```fish
@@ -755,7 +773,7 @@ echo "set -gx GPG_TTY (tty)" >> ~/.config/fish/config.fish
 ```
 
 ### C) Blocking Metadata Creation
- 1. Remove sensitive information even when user dictionary and suggestions are off and prevent them from being re-created:
+ 1. Remove sensitive information even when user dictionary/suggestions are off and prevent them from being re-created:
 ```fish
 rm -rfv "~/Library/LanguageModeling/*" "~/Library/Spelling/*" "~/Library/Suggestions/*"
 chmod -R 000 ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions
@@ -791,7 +809,7 @@ chmod -R 000 "~/Library/Autosave Information"
 chflags -R uchg "~/Library/Containers/<APP>/Data/Library/Autosave Information"
 chflags -R uchg "~/Library/Autosave Information"
 ```
- 6. Clear and lock the Siri analytics database:
+ 6. Clear and lock Siri analytics database:
 ```fish
 rm -rfv ~/Library/Assistant/SiriAnalytics.db
 chmod -R 000 ~/Library/Assistant/SiriAnalytics.db
