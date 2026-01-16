@@ -69,7 +69,7 @@ timeout = 5000
 keepalive = 60
 
 # Mullvad integration: uncomment to DNS through the tunnel
-proxy = 'socks5://127.0.0.1:1080'
+# proxy = 'socks5://127.0.0.1:1080'
 
 
 ##############################################
