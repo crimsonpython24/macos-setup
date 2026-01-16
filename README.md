@@ -32,17 +32,10 @@ sudo log config --mode "level:off" --subsystem com.apple.diagnosticd
 # Prevents SUID programs from dumping core
 sudo sysctl -w kern.sugid_coredump=0
 
-# Randomize MAC on each connection
-sudo ifconfig en0 ether $(openssl rand -hex 6 | sed 's/\(..\)/\1:/g; s/.$//')
-
 # Secure virtual memory
 sudo defaults write /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap -bool YES
-
-# Verify
 defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
-
-# (Not hardware but) disable automatic login completely
-sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null
+# 1
 ```
  - Extra Memos
    - Do not install [unmaintained](https://the-sequence.com/twitch-privileged-helper) applications
@@ -56,10 +49,10 @@ sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser 2>
 
 ## 1. CLI Tools
 
- > This tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if necessary.
+ > This tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if testing path or commands in that user.
 
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion.
- - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php). More tools will be available in section 5.
+ - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php).
 
 ## 2. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
@@ -88,6 +81,10 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
     - Also copy the Unbound [configuration](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) and [DNSCrypt config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/dnscrypt-proxy.toml) beforehand.
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
+```zsh
+/opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+# Edit file
+```
  3. Edit the property list to give DNSCrypt startup access:
 ```zsh
 sudo vi /opt/local/etc/LaunchDaemons/org.macports.dnscrypt-proxy/org.macports.dnscrypt-proxy.plist
@@ -482,6 +479,10 @@ sudo aide --check
 # f++++++++++++: /Library/LaunchAgents/com.test.aide.plist
 ```
 ```zsh
+# Run whenever finished installing legitimate apps/processes
+sudo aide --update
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
 echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
 sudo aide --check
 ```
@@ -493,11 +494,6 @@ ls -la /opt/local/var/lib/aide/aide.db
  7. Cleanup.
 ```bash
 sudo rm /Library/LaunchAgents/com.test.aide.plist
-sudo aide --update
-sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
-```
- 8. When installing apps, update MacPorts, or make intentional config changes, update the database:
-```zsh
 sudo aide --update
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 ```
@@ -622,7 +618,7 @@ fish_add_path /opt/local/sbin
     - [jorgebucaran/nvm.fish](https://github.com/jorgebucaran/nvm.fish)
     - [jorgebucaran/autopair.fish](https://github.com/jorgebucaran/autopair.fish)
     - [nickeb96/puffer-fish](https://github.com/nickeb96/puffer-fish)
- 6. Configure `fzf` key bindings:
+ 6. Configure `fzf` key bindings (note: this step will throw an error if `fzf.fish` is not installed, which one can directly skip):
 ```fish
 echo "fzf_configure_bindings --directory=\cf --git_log=\cl --git_status=\cs --history=\cr --processes=\cp --variables=\cv" >> ~/.config/fish/config.fish
 ```
@@ -656,7 +652,13 @@ function uext
     find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
 end
 ```
- 9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations†](https://github.com/cpy24/iterm-setup)
+ 9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/config.fish).
+     - In the initial config, select "Classic" (step 1), "Dark" (step 3), and "24-hour format" (step 4). All other options can go with default.
+     - Also edit [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/_tide_item_context.fish).
+```fish
+vi ~/.config/fish/config.fish
+vi ~/.config/fish/functions/_tide_item_context.fish
+```
 
 ### A) SSH Configuration
  1. Install new configuration from [ssh-config](https://github.com/crimsonpython24/macos-setup/blob/master/shell/ssh_config):
