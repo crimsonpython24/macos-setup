@@ -502,7 +502,7 @@ sudo aide --update
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 ```
 
-## A) Quick Reference
+### A) Quick Reference
 
 | Task | Command |
 |------|---------|
@@ -512,7 +512,7 @@ sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 | View log | `sudo cat /opt/local/var/log/aide/aide.log` |
 | Verbose check | `sudo aide --check -L info` |
 
-## B) Monitored Directories
+### B) Monitored Directories
 
 | Category | Paths | Reason |
 |----------|-------|-----|
