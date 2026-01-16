@@ -1,12 +1,11 @@
-# /opt/local/etc/dnscrypt-proxy/dnscrypt-proxy.toml
-# Hardened configuration for nation-state threat model
-# Works with Unbound forwarding on 127.0.0.1:54
+# /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+# Runs on 127.0.0.1:54 to work with Unbound
 
 ##############################################
 #        Global settings                     #
 ##############################################
 
-# Unbound forwards here
+# Unbound upstream addresses
 listen_addresses = ['127.0.0.1:54', '[::1]:54']
 
 # Maximum concurrent client connections
@@ -21,7 +20,7 @@ max_clients = 250
 ipv4_servers = true
 ipv6_servers = false
 
-# DNSCrypt only - better anonymization support than DoH
+# DNSCrypt only (better anonymization support than DoH)
 dnscrypt_servers = true
 doh_servers = false
 odoh_servers = false
@@ -34,7 +33,7 @@ require_nofilter = true
 # Disable servers whose operators also run relays we use
 # Critical: server and relay MUST be different entities
 disabled_server_names = [
-    # CleanBrowsing - operates both servers and relays
+    # CleanBrowsing -- operates both servers and relays
     'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
     'cs-ch', 'cs-berlin', 'cs-belgium', 'cs-brazil', 'cs-czech',
     'cs-dc', 'cs-dus', 'cs-finland', 'cs-fl', 'cs-ga', 'cs-hungary',
@@ -43,9 +42,11 @@ disabled_server_names = [
     'cs-nyc', 'cs-ore', 'cs-poland', 'cs-pt', 'cs-ro', 'cs-sea',
     'cs-serbia', 'cs-singapore', 'cs-sk', 'cs-swe', 'cs-sydney',
     'cs-tokyo', 'cs-tx', 'cs-vancouver',
-    # Scaleway - operates both servers and relays
+    
+    # Scaleway -- operates both servers and relays
     'scaleway-fr', 'scaleway-ams',
-    # DNSCrypt.uk - operates both servers and relays
+    
+    # DNSCrypt.uk -- operates both servers and relays
     'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6',
     'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
 ]
@@ -67,8 +68,8 @@ timeout = 5000
 # Keep connections alive (seconds)
 keepalive = 60
 
-# Mullvad integration - uncomment if you want DNS through the tunnel
-# proxy = 'socks5://127.0.0.1:1080'
+# Mullvad integration: uncomment to DNS through the tunnel
+proxy = 'socks5://127.0.0.1:1080'
 
 
 ##############################################
@@ -136,7 +137,7 @@ netprobe_address = '9.9.9.9:53'
 #        Filters                             #
 ##############################################
 
-# Don't block IPv6 responses (your original setting)
+# Don't block IPv6 responses
 block_ipv6 = false
 
 # Block queries for unqualified names (prevents leaks)
@@ -287,7 +288,7 @@ routes = [
     ]}
 ]
 
-# Your original setting - allows incompatible servers with direct fallback
+# Allow incompatible servers with direct fallback
 skip_incompatible = false
 
 # Allow direct cert fetch if relay fails
@@ -299,7 +300,7 @@ direct_cert_fallback = true
 ##############################################
 
 [dns64]
-# Disabled - not using NAT64
+# Disabled -- not using NAT64
 
 
 ##############################################
@@ -307,7 +308,7 @@ direct_cert_fallback = true
 ##############################################
 
 [ip_encryption]
-# Disabled - no logging anyway
+# Disabled -- no logging anyway
 algorithm = "none"
 key = ""
 
@@ -317,7 +318,7 @@ key = ""
 ##############################################
 
 [monitoring_ui]
-# Disabled - reduces attack surface
+# Disabled -- reduces attack surface
 enabled = false
 
 
