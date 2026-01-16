@@ -719,27 +719,91 @@ Host legacy-server
 
 ### B) GPG Configuration
  1. Make sure GnuPG is installed: `sudo port install gnupg2`.
- 2. Generate key (RSA and RSA):
+ 2. Create configuration directory and edit [GPG configuration](https://github.com/crimsonpython24/macos-setup/blob/master/shell/gpg.conf).
+```fish
+mkdir -p ~/.gnupg
+chmod 700 ~/.gnupg
+vi ~/.gnupg/gpg.conf
+# Edit file
+```
+ 3. Give permissions and check for syntax errors:
+```fish
+chmod 600 ~/.gnupg/gpg.conf
+gpg2 --gpgconf-test
+# Should be empty
+```
+ 4. Generate key (RSA and RSA):
 ```fish
 gpg2 --full-generate-key
 ```
- 3. List keys.
+ 5. List keys.
 ```fish
 gpg2 --list-secret-keys --keyid-format=long
 # sec   rsa4096/ABC123DEF456 2026-01-11 [SC]
 gpg2 --armor --export ABC123DEF456
 ```
- 4. Add the key to [GitHub](https://github.com/settings/keys).
- 5. Configure Git to use the signing key:
+ 6. Add the key to [GitHub](https://github.com/settings/keys).
+ 7. Configure Git to use the signing key:
 ```fish
 git config --global user.signingkey ABC123DEF456
 git config --global commit.gpgsign true
 git config --global gpg.program gpg2
 ```
- 6. Add TTY to fish:
+ 8. Add TTY to fish:
 ```fish
 echo "set -gx GPG_TTY (tty)" >> ~/.config/fish/config.fish
 ```
+
+### C) Blocking Metadata Creation
+ 1. Remove sensitive information even when user dictionary and suggestions are off and prevent them from being re-created:
+```fish
+rm -rfv "~/Library/LanguageModeling/*" "~/Library/Spelling/*" "~/Library/Suggestions/*"
+chmod -R 000 ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions
+chflags -R uchg ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions
+```
+ 2. Clear and lock QuickLook application support metadata:
+```fish
+rm -rfv "~/Library/Application Support/Quick Look/*"
+chmod -R 000 "~/Library/Application Support/Quick Look"
+chflags -R uchg "~/Library/Application Support/Quick Look"
+```
+ 3. Clear and lock document revision metadata:
+```fish
+sudo rm -rfv /.DocumentRevisions-V100/*
+sudo chmod -R 000 /.DocumentRevisions-V100
+sudo chflags -R uchg /.DocumentRevisions-V100
+```
+ 4. Clear and lock saved application state:
+```fish
+rm -rfv ~/Library/Saved\ Application\ State/*
+rm -rfv ~/Library/Containers/<APPNAME>/Data/Library/Saved\ Application\ State
+chmod -R 000 ~/Library/Saved\ Application\ State/
+chmod -R 000 ~/Library/Containers/<APPNAME>/Data/Library/Saved\ Application\ State
+chflags -R uchg ~/Library/Saved\ Application\ State/
+chflags -R uchg ~/Library/Containers/<APPNAME>/Data/Library/Saved\ Application\ State
+```
+ 5. Clear and lock autosave metadata:
+```fish
+rm -rfv "~/Library/Containers/<APP>/Data/Library/Autosave Information"
+rm -rfv "~/Library/Autosave Information"
+chmod -R 000 "~/Library/Containers/<APP>/Data/Library/Autosave Information"
+chmod -R 000 "~/Library/Autosave Information"
+chflags -R uchg "~/Library/Containers/<APP>/Data/Library/Autosave Information"
+chflags -R uchg "~/Library/Autosave Information"
+```
+ 6. Clear and lock the Siri analytics database:
+```fish
+rm -rfv ~/Library/Assistant/SiriAnalytics.db
+chmod -R 000 ~/Library/Assistant/SiriAnalytics.db
+chflags -R uchg ~/Library/Assistant/SiriAnalytics.db
+```
+ 7. After logging into App Store to download Mac apps, clear iCloud user info:
+```fish
+defaults delete ~/Library/Preferences/com.apple.iTunes.plist StoreUserInfo
+defaults delete ~/Library/Preferences/com.apple.iTunes.plist WirelessBuddyID
+```
+
+<sup>https://github.com/drduh/macOS-Security-and-Privacy-Guide/tree/master?tab=readme-ov-file#metadata-and-artifacts</sup><br/>
 
 ## Footnotes
 
