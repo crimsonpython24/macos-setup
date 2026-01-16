@@ -366,7 +366,12 @@ pip --version
 # pip 25.3 from /opt/local/Library
 exit
 ```
- 5. Optional: load custom ODVs (organization-defined values)
+ 5. Remove `warren` from the FileVault authorized users group to ensure that only admin can unlock FV (so in a double-auth, the first login must be admin):
+```zsh
+sudo fdesetup list
+sudo fdesetup remove -user <username>
+```
+ 6. Optional: load custom ODVs (organization-defined values)
 ```zsh
 cd ~/Desktop/Profiles/macos_security-tahoe
 
@@ -385,7 +390,7 @@ odv:
   custom: 0
 EOF
 ```
- 6. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
+ 7. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
 ```zsh
 python3 scripts/generate_guidance.py \
         -P \
@@ -393,29 +398,28 @@ python3 scripts/generate_guidance.py \
         -p \
     build/baselines/cnssi-1253_cust.yaml
 ```
- 7. If there is a previous configuration profile installed, remove it in Settings.app first. Run the compliance script.
+ 8. If there is a previous configuration profile installed, remove it in Settings.app first. Run the compliance script.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 8. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
- 9. Install the configuration profile in the Settings app:
+ 9. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
+ 10. Install the configuration profile in the Settings app:
 ```zsh
 sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
 ```
- 10. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
- 11. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
+ 11. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 12. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 12. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
- 13. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 14. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these three:
+ 13. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
+ 14. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 15. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
-os_world_writable_library_folder_configure
 ```
- 15. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
+ 16. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -428,18 +432,10 @@ sudo pfctl -s info
 # FileVault
 sudo fdesetup status
 ```
- 16. Note from previous step: one might encounter these two warnings.
+ 17. Note from previous step: one might encounter these two warnings.
       - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
       - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 17. The script should yield 98% compliance by running option 2, then option 1. Run this line:
-```zsh
-/usr/bin/find /Library -type d -perm -002 ! -perm -1000 ! -xattrname com.apple.rootless 2>/dev/null
-# Should only have /Library/AppStore
-
-# Otherwise, run
-sudo chmod o-w /Bad/Directory
-```
- 18. `/Library/AppStore` will fail because that line is SIP-protected, and it is highly discouraged to disable SIP only to modify that one line. Since it is not safe to exclude that directory or modify its permissions, keep the compliance script at 99% is totally fine.
+ 18. The script should yield 100% compliance by running option 2, then option 1.
  19. Restart the device at this point.
  20. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
 ```zsh
@@ -684,9 +680,9 @@ function uext
     find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
 end
 ```
- 9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/config.fish).
+ 9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/config.fish).
      - In the initial config, select "Classic" (step 1), "Dark" (step 3), and "24-hour format" (step 4). All other options can go with default.
-     - Also edit [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/_tide_item_context.fish).
+     - Also edit [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/_tide_item_context.fish).
 ```fish
 vi ~/.config/fish/config.fish
 vi ~/.config/fish/functions/_tide_item_context.fish
