@@ -50,7 +50,7 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
 ## 1. CLI Tools
  > Until section 7, this tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if testing path or commands in that user.
 
- - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion.
+ - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion (technically port can only be installed in admin because it needs sudo access, but still).
  - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php).
 
 ## 2. DNS Setup
@@ -266,6 +266,7 @@ sudo chown root:wheel /var/db/santa/faa_policy.plist
 ```
  5. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 4) because NIST configurations block adding new profiles.
 ```zsh
+cd ~/Desktop && mkdir Profiles && cd Profiles
 vi santa.mobileconfig
 # Paste content
 
@@ -325,6 +326,7 @@ vi cnssi-1253_cust.yaml
 sudo port install python314
 sudo port select --set python python314
 sudo port select --set python3 python314
+# For admin's shell
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
 source ~/.zshrc
@@ -407,10 +409,11 @@ sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
  12. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
  13. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 14. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 14. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these three:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
+os_world_writable_library_folder_configure
 ```
  15. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
@@ -426,9 +429,17 @@ sudo pfctl -s info
 sudo fdesetup status
 ```
  16. Note from previous step: one might encounter these two warnings.
-    - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
-    - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 17. The script should yield 100% compliance by running option 2, then option 1.
+      - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
+      - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
+ 17. The script should yield 99% compliance by running option 2, then option 1. Run this line:
+```zsh
+/usr/bin/find /Library -type d -perm -002 ! -perm -1000 ! -xattrname com.apple.rootless 2>/dev/null
+# Should only have /Library/AppStore
+
+# Otherwise, run
+sudo chmod o-w /Bad/Directory
+```
+ 18. `/Library/AppStore` will fail because that line is SIP-protected, and it is highly discouraged to disable SIP only to modify that one line. Since it is not safe to exclude that directory or modify its permissions, keep the compliance script at 99% is totally fine.
 
 **Note** Restart the device at this point.
 
