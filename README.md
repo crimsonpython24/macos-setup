@@ -408,7 +408,7 @@ sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobilecon
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
  12. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
- 13. Run options 2 and 1 yet again. The compliance percentage should be about 98%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 13. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
  14. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these three:
 ```zsh
 os_firewall_default_deny_require
@@ -431,7 +431,7 @@ sudo fdesetup status
  16. Note from previous step: one might encounter these two warnings.
       - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
       - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 17. The script should yield 99% compliance by running option 2, then option 1. Run this line:
+ 17. The script should yield 98% compliance by running option 2, then option 1. Run this line:
 ```zsh
 /usr/bin/find /Library -type d -perm -002 ! -perm -1000 ! -xattrname com.apple.rootless 2>/dev/null
 # Should only have /Library/AppStore
@@ -440,10 +440,15 @@ sudo fdesetup status
 sudo chmod o-w /Bad/Directory
 ```
  18. `/Library/AppStore` will fail because that line is SIP-protected, and it is highly discouraged to disable SIP only to modify that one line. Since it is not safe to exclude that directory or modify its permissions, keep the compliance script at 99% is totally fine.
-
-**Note** Restart the device at this point.
+ 19. Restart the device at this point.
+ 20. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
+```zsh
+sudo zsh ~/Desktop/Profiles/macos_security-tahoe/build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
 
 **Note** If unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
+
+**Note** Run `pip list` after this section. There should only be `pip` and `setuptools` in global python environment.
 
 ## 5. AIDE Setup
  1. Install AIDE via MacPorts: `sudo port install aide`; note the post-install message about configuration location: `/opt/local/etc/aide/aide.conf`.
@@ -460,23 +465,23 @@ sudo aide --init -L info
 #    ...
 # AIDE successfully initialized database.
 # New AIDE database written to /opt/local/var/lib/aide/aide.db.new
-# Number of entries:	~200000
-# End timestamp: ... (run time 0m 15-30s)
+# Number of entries:	~9000
+# End timestamp: ... (run time 0m 0-5s)
 ```
  4. Move database into history directory & verify database:
 ```zsh
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 
 ls -lh /opt/local/var/lib/aide/aide.db
-# Expected: ~45-50MB
+# Expected: ~1.5MB
 ```
  5. Test installation:
 ```zsh
 sudo aide --check
 # AIDE found NO differences between database and filesystem. Looks okay!!
-# Number of entries:	~200000
+# Number of entries:	~9000
 ...
-# End timestamp: ... (run time 1m 0-5s)
+# End timestamp: ... (run time 0m 0-5s)
 ```
 ```zsh
 sudo touch /Library/LaunchAgents/com.test.aide.plist
@@ -500,19 +505,26 @@ sudo aide --check
 sudo aide --update
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
+
 echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
 sudo aide --check
+# Changed entries:		1
 ```
  6. Ensure that database cannot be tampered:
 ```zsh
 ls -la /opt/local/var/lib/aide/aide.db
-# -rw------- root admin
+# -rw-------  1 root  admin  1454621 Jan 16 10:22 /opt/local/var/lib/aide/aide.db
 ```
  7. Cleanup after testing for the next manual/on-demand scan.
 ```bash
 sudo rm /Library/LaunchAgents/com.test.aide.plist
 sudo aide --update
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
 ```
 
 ### A) Quick Reference
@@ -554,6 +566,7 @@ sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
 sudo dseditgroup -o edit -d warren -t user admin
+# Should be blank
 ```
  2. Force certain `/Library` folders to be inaccessible to apps in `~/Library`.
 ```zsh
@@ -564,11 +577,8 @@ CRITICAL_DIRS=(
     "/Library/LaunchAgents"
     "/Library/LaunchDaemons"
     "/Library/StartupItems"
-    "/Library/PrivilegedHelperTools" 
     "/Library/Security/SecurityAgentPlugins"
     "/Library/DirectoryServices/PlugIns"
-    "/System/Library/LaunchAgents"
-    "/System/Library/LaunchDaemons"
 )
 
 for dir in "${CRITICAL_DIRS[@]}"; do
