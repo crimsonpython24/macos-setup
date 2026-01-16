@@ -431,7 +431,106 @@ sudo fdesetup status
 
 **Note** If unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
 
-## 5. Application Install
+## 5. AIDE Setup
+ 1. Install AIDE via MacPorts: `sudo port install aide`; note the post-install message about configuration location: `/opt/local/etc/aide/aide.conf`.
+ 2. Edit [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
+```zsh
+sudo vi /opt/local/etc/aide/aide.conf
+# Paste content
+```
+ 3. Initialize database.
+```zsh
+sudo aide --init -L info
+#    INFO: read new entries from disk (limit: '(none)', root prefix: '')
+#    INFO: write new entries to database: file:/opt/local/var/lib/aide/aide.db.new
+#    ...
+# AIDE successfully initialized database.
+# New AIDE database written to /opt/local/var/lib/aide/aide.db.new
+# Number of entries:	~200000
+# End timestamp: ... (run time 0m 15-30s)
+```
+ 4. Move database into history directory & verify database.
+```zsh
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
+ls -lh /opt/local/var/lib/aide/aide.db
+# Expected: ~45-50MB
+```
+ 5. Test installation:
+```zsh
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
+# Number of entries:	~200000
+...
+# End timestamp: ... (run time 1m 0-5s)
+```
+```zsh
+sudo touch /Library/LaunchAgents/com.test.aide.plist
+
+sudo aide --check
+# AIDE found differences between database and filesystem!!
+# Summary:
+#   Total number of entries:	...
+#   Added entries:		1
+#   Removed entries:		0
+#   Changed entries:		1
+
+# ---------------------------------------------------
+# Added entries:
+# ---------------------------------------------------
+
+# f++++++++++++: /Library/LaunchAgents/com.test.aide.plist
+```
+```zsh
+echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
+sudo aide --check
+```
+ 6. Ensure that database cannot be tampered:
+```zsh
+ls -la /opt/local/var/lib/aide/aide.db
+# -rw------- root admin
+```
+ 7. Cleanup.
+```bash
+sudo rm /Library/LaunchAgents/com.test.aide.plist
+sudo aide --update
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+```
+ 8. When installing apps, update MacPorts, or make intentional config changes, update the database:
+```zsh
+sudo aide --update
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+```
+
+## A) Quick Reference
+
+| Task | Command |
+|------|---------|
+| Manual check | `sudo aide --check` |
+| Update after changes | `sudo aide --update && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
+| Re-initialize | `sudo aide --init && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
+| View log | `sudo cat /opt/local/var/log/aide/aide.log` |
+| Verbose check | `sudo aide --check -L info` |
+
+## B) Monitored Directories
+
+| Category | Paths | Reason |
+|----------|-------|-----|
+| LaunchDaemons | `/Library/LaunchDaemons` | Root-level persistence |
+| LaunchAgents | `/Library/LaunchAgents`, `~/Library/LaunchAgents` | User-level persistence |
+| Applications | `/Applications` | App bundle integrity |
+| MacPorts | `/opt/local/bin`, `/opt/local/sbin` | Binary integrity |
+| Shell configs | `~/.zshrc`, `~/.bash_profile`, etc. | Backdoor detection |
+| SSH | `~/.ssh/config`, `/etc/ssh` | SSH hijacking |
+| sudoers | `/etc/sudoers`, `/etc/sudoers.d` | Privilege escalation |
+| PAM | `/etc/pam.d` | Auth bypass |
+| Auth plugins | `/Library/Security` | Login interception |
+| Scripting | `/Library/ScriptingAdditions` | AppleScript injection |
+| Input methods | `/Library/Input Methods` | Keylogging |
+| Screen savers | `/Library/Screen Savers` | Code execution |
+| Santa config | `/var/db/santa` | Security tool tampering |
+
+## 6. Application Install
 > Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
 
 > Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
@@ -490,7 +589,7 @@ which gpg
 
 **Note** If macOS does not allow opening the LibreWolf browser, fix the error notification with `xattr -d com.apple.quarantine /Applications/LibreWolf.app`
 
-## 6. Fish Shell
+## 7. Fish Shell
 
 > For this section, running in warren's GUI is easier (keep zsh as default for admin since that account should not be used besides global settings). Obviously `su - admin` when escalation is needed.
 
