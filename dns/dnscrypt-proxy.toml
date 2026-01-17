@@ -1,5 +1,4 @@
 # /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
-# Runs on 127.0.0.1:54 to work with Unbound
 
 ##############################################
 #        Global settings                     #
@@ -30,23 +29,56 @@ require_dnssec = true
 require_nolog = true
 require_nofilter = true
 
-# Disable servers whose operators also run relays we use
-# Critical: server and relay MUST be different entities
-disabled_server_names = [
-    # CleanBrowsing -- operates both servers and relays
-    'cs-de', 'cs-nl', 'cs-fr', 'cs-austria', 'cs-barcelona',
-    'cs-ch', 'cs-berlin', 'cs-belgium', 'cs-brazil', 'cs-czech',
-    'cs-dc', 'cs-dus', 'cs-finland', 'cs-fl', 'cs-ga', 'cs-hungary',
-    'cs-il', 'cs-india', 'cs-la', 'cs-london', 'cs-manchester',
-    'cs-md', 'cs-milan', 'cs-montreal', 'cs-norway', 'cs-nv',
-    'cs-nyc', 'cs-ore', 'cs-poland', 'cs-pt', 'cs-ro', 'cs-sea',
-    'cs-serbia', 'cs-singapore', 'cs-sk', 'cs-swe', 'cs-sydney',
-    'cs-tokyo', 'cs-tx', 'cs-vancouver',
+server_names = [
+    # === Cryptostorm European servers ===
+    'cs-de',
+    'cs-dus',
+    'cs-berlin',
+    'cs-nl',
+    'cs-belgium',
+    'cs-fr',
+    'cs-ch',
     
-    # Scaleway -- operates both servers and relays
+    # UK & Ireland
+    'cs-london',
+    'cs-manchester',
+    
+    # Southern Europe
+    'cs-barcelona',
+    'cs-pt',
+    'cs-milan',
+    
+    # Northern Europe
+    'cs-swe',
+    'cs-norway',
+    'cs-finland',
+    
+    # Central/Eastern Europe
+    'cs-austria',
+    'cs-czech',
+    'cs-poland',
+    'cs-hungary',
+    'cs-ro',
+    'cs-serbia',
+    'cs-md',
+    
+    # === Other European DNSCrypt servers ===
+    'dct-de',
+    'dct-fr',
+    'digitalprivacy.diy-dnscrypt-ipv4'
+]
+
+# Disable servers whose operators also run relays
+# Since this config use cs-* servers, do not use cs-* relays (operator correlation)
+# The servers below run both servers AND relays - disable them
+disabled_server_names = [
+    # CleanBrowsing
+    'cleanbrowsing-adult', 'cleanbrowsing-family', 'cleanbrowsing-security',
+    
+    # Scaleway
     'scaleway-fr', 'scaleway-ams',
     
-    # DNSCrypt.uk -- operates both servers and relays
+    # DNSCrypt.uk
     'dnscrypt.uk-ipv4', 'dnscrypt.uk-ipv6',
     'v.dnscrypt.uk-ipv4', 'v.dnscrypt.uk-ipv6'
 ]
@@ -76,8 +108,9 @@ keepalive = 60
 #        Load Balancing                      #
 ##############################################
 
-# Use fastest 2 servers, randomize between them
-lb_strategy = 'p2'
+# Use fastest 3 servers from your European list, randomize between them
+# Increased from p2 to p3 for better distribution
+lb_strategy = 'p3'
 
 # Continuously estimate latency
 lb_estimator = true
@@ -277,14 +310,34 @@ fragments_blocked = [
 
 [anonymized_dns]
 
+# CRITICAL: Relays must be from DIFFERENT operators than servers!
+# Since we primarily use cs-* (cryptostorm) servers,
+# we use NON-cryptostorm European relays here.
+
 routes = [
     { server_name = '*', via = [
-        'anon-cs-la', 
+        # === DNSCry.pt relays (European locations, different operator) ===
         'dnscry.pt-anon-amsterdam-ipv4',
         'dnscry.pt-anon-zurich-ipv4',
-        'anon-dnscrypt.no-ipv4',
-        'anon-meganerd-ipv4', 
-        'dnscry.pt-anon-singapore-ipv4'
+        'dnscry.pt-anon-frankfurt-ipv4',
+        'dnscry.pt-anon-london-ipv4',
+        'dnscry.pt-anon-paris-ipv4',
+        'dnscry.pt-anon-milan-ipv4',
+        'dnscry.pt-anon-stockholm02-ipv4',
+        
+        # === Scaleway relays (Frank Denis/jedisct1, France & Amsterdam) ===
+        'anon-scaleway',
+        'anon-scaleway-ams',
+        'anon-scaleway2',
+        
+        # === Other European relays (all different operators) ===
+        'anon-kama',
+        'anon-ibksturm',
+        'anon-dnswarden-swiss',
+        'anon-dnscrypt.uk-ipv4', 
+        'anon-v.dnscrypt.uk-ipv4',
+        'anon-serbica',
+        'anon-digitalprivacy.diy-ipv4'
     ]}
 ]
 
