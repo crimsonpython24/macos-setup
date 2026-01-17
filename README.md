@@ -455,7 +455,7 @@ sudo zsh ~/Desktop/Profiles/macos_security-tahoe/build/cnssi-1253_cust/cnssi-125
 **Note** Run `pip list` after this section. There should only be `pip` and `setuptools` in global python environment.
 
 ## 5. AIDE Setup
- 1. Install AIDE via MacPorts: `sudo port install aide`; note the post-install message about configuration location: `/opt/local/etc/aide/aide.conf`.
+ 1. Install AIDE via MacPorts: `sudo port install aide`.
  2. Edit the [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
 ```zsh
 sudo vi /opt/local/etc/aide/aide.conf
@@ -471,6 +471,7 @@ sudo aide --init -L info
 # New AIDE database written to /opt/local/var/lib/aide/aide.db.new
 # Number of entries:	~9000
 # End timestamp: ... (run time 0m 0-5s)
+# INFO: exit AIDE with exit code '0'    <--- 0 = no error
 ```
  4. Move database into history directory & verify database:
 ```zsh
@@ -514,7 +515,9 @@ sudo aide --check
 
 echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
 sudo aide --check
-# Changed entries:		1
+#  Added entries:		0
+#  Removed entries:		0
+#  Changed entries:		1
 ```
  6. Ensure that database cannot be tampered:
 ```zsh
@@ -560,12 +563,10 @@ sudo aide --check
 | Santa config | `/var/db/santa` | Security tool tampering |
 
 ## 6. Application Install
- > Even when applications are installed in `~/Applications`, e.g., `/Users/warren/Applications`, they might be able to write to `/Library/`, i.e. the root directory, if permissions are accidentally given.
-
- > Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
-
  > [!NOTE]
  > Although this section applies to `warren`, it is more convenient to run the script inside `admin` because `warren` is not in the sudoers group (and hence cannot run `sudo` commands), and `admin` cannot read/write warren's files because `admin` is not `root`. This is the same note as in section 1.
+
+ > Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
 
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
@@ -591,7 +592,7 @@ done
 ```
 ```zsh
 sudo chmod +x ~/Desktop/Profiles/directory_lock.sh
-./directory_lock.sh
+~/Desktop/Profiles/./directory_lock.sh
 ```
  3. Note for step 2: one can add `/Library/PrivilegedHelperTools` into the directory list, but this will not be created until an application writes to that directory. I.e., this directory will be empty if one runs this script in a fresh system. Also test step 2:
 ```zsh
@@ -604,19 +605,13 @@ ls -led /Library/StartupItems
 ```
  4. Rollback command:
 ```zsh
+# use -a instead of +a
 sudo chmod -a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" /Library/LaunchAgents
 ```
  5. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
 
 ### GnuPG
-If any applications are curl'd through Git, use GnuPG instead of gpg:
-```zsh
-sudo port install gnupg2
-sudo port load openldap
-which gpg
-# /opt/local/bin/gpg
-```
-And make sure to configure it as in [section 7(B)](https://github.com/crimsonpython24/macos-setup?tab=readme-ov-file#b-gpg-configuration).
+If any applications are curl'd through Git, make sure to configure it as in [section 7(B)](https://github.com/crimsonpython24/macos-setup?tab=readme-ov-file#b-gpg-configuration).
 
 ### Firefox
  - When using Firefox, use the uploaded [user-overrides.js](https://github.com/crimsonpython24/macos-setup/blob/master/browser/user-overrides.js) in this repo.
@@ -624,6 +619,8 @@ And make sure to configure it as in [section 7(B)](https://github.com/crimsonpyt
 
 ## 7. Fish Shell
  > For this section, running in warren's GUI is easier (keep zsh as default for admin since that account should not be used besides global settings). Obviously `su - admin` when escalation is needed.
+
+ > Also remember to turn on secure keyboard entry for warren's terminal.
 
  1. First change the hostname:
 ```zsh
