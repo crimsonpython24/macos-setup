@@ -620,8 +620,6 @@ If any applications are curl'd through Git, make sure to configure it as in [sec
 ## 7. Fish Shell
  > For this section, running in warren's GUI is easier (keep zsh as default for admin since that account should not be used besides global settings). Obviously `su - admin` when escalation is needed.
 
- > Also remember to turn on secure keyboard entry for warren's terminal.
-
  1. First change the hostname:
 ```zsh
 sudo scutil --set ComputerName "device"
@@ -629,34 +627,41 @@ sudo scutil --set LocalHostName "device"
 sudo scutil --set HostName "device"
 hostname # device
 ```
- 2. Install fish through the admin account:
+ 2. Restart the terminal to ensure the hostname change takes effect.
+ 3. Install fish through the admin account:
 ```zsh
 sudo port install fish
 ```
- 3. Switch shells for warren only:
+ 4. Switch shells for warren only:
 ```zsh
 sudo sh -c 'echo /opt/local/bin/fish >> /etc/shells'
 sudo chpass -s /opt/local/bin/fish warren
 ```
- 4. Add paths to fish:
+ 5. Add paths to fish:
 ```fish
 # su - warren
+# fish (zsh is still default until quitting Terminal again)
 fish_add_path /opt/local/bin
 fish_add_path /opt/local/sbin
 ```
- 4. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/default.terminal) (there is nothing special about this terminal config, they are simply personal prefs).
- 5. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
+ 6. Download [Source Code Pro Nerd Font](https://www.nerdfonts.com/font-downloads) and macOS terminal config [in this repo](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/default.terminal)
+    - There is nothing special about this terminal config, they are simply personal prefs).
+    - Load the custom font and config in "Terminal" > "cmd + `,`" > "Import profile". This configuration chooses not to use iTerm2 because personally most features are not used, and not Alacritty because some of `tide@v6`'s features do not work there.
+ 7. Install [Fisher](https://github.com/jorgebucaran/fisher) with the following extensions:
     - [jethrokuan/z](https://github.com/jethrokuan/z)
     - [PatrickF1/fzf.fish](https://github.com/PatrickF1/fzf.fish) -- depends on `sudo port install fzf fd bat`
     - [jorgebucaran/nvm.fish](https://github.com/jorgebucaran/nvm.fish)
     - [jorgebucaran/autopair.fish](https://github.com/jorgebucaran/autopair.fish)
     - [nickeb96/puffer-fish](https://github.com/nickeb96/puffer-fish)
- 6. Configure `fzf` key bindings (note: this step will throw an error if `fzf.fish` is not installed, which one can directly skip):
+```fish
+fisher install jethrokuan/z    # Example
+```
+ 8. Configure `fzf` key bindings (note: this step will throw an error if `fzf.fish` is not installed, which one can directly skip):
 ```fish
 echo "fzf_configure_bindings --directory=\cf --git_log=\cl --git_status=\cs --history=\cr --processes=\cp --variables=\cv" >> ~/.config/fish/config.fish
 ```
- 7. Download Node: `nvm install lts`.
- 8. Add custom functions:
+ 9. Download Node: `nvm install lts`.
+ 10. Add custom functions:
 ```fish
 ~/.config/fish/functions/mkcd.fish
 
@@ -685,9 +690,9 @@ function uext
     find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
 end
 ```
- 9. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/config.fish).
+ 11. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/config.fish).
      - In the initial config, select "Classic" (step 1), "Dark" (step 3), and "24-hour format" (step 4). All other options can go with default.
-     - Also edit [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/_tide_item_context.fish).
+     - Also edit the [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/_tide_item_context.fish) to complete this setup. Restart Terminal for both changes to take effect.
 ```fish
 vi ~/.config/fish/config.fish
 vi ~/.config/fish/functions/_tide_item_context.fish
@@ -698,6 +703,7 @@ vi ~/.config/fish/functions/_tide_item_context.fish
 ```fish
 mkdir ~/.ssh
 vi ~/.ssh/config
+# Paste contents
 chmod 600 ~/.ssh/config
 ```
  2. Create the sockets directory for multiplexing:
@@ -715,7 +721,6 @@ chmod 700 ~/.ssh
 chmod 600 ~/.ssh/config
 chmod 600 ~/.ssh/*_ed25519
 chmod 644 ~/.ssh/*_ed25519.pub
-chmod 600 ~/.ssh/known_hosts
 ```
  5. Add keys to macOS keychain:
 ```fish
@@ -731,7 +736,7 @@ cat ~/.ssh/github_ed25519.pub | pbcopy
 ```fish
 ssh -T git@github.com
 cat ~/.ssh/known_hosts
-# |1|qN7XE853AcGGBmJDT/APv+AiZGU=|qq21+AC5OMD...
+# |1|qN7XE853AcGGBmJDT/APv+AiZGU=|qq21+AC5OMD...    <-- should be hashed
 ```
  8. Run the [test script](https://github.com/crimsonpython24/macos-setup/blob/master/shell/ssh_test.sh) to verify that SSH settings are applied.
 ```fish
@@ -740,6 +745,7 @@ vi ssh_test.sh
 
 chmod +x ssh_test.sh 
 ./ssh_test.sh
+rm ssh_test.sh
 ```
 
 **Note** If legacy SSH servers are not working, use the following configuration:
@@ -761,10 +767,11 @@ Host legacy-server
  1. Make sure GnuPG is installed: `sudo port install gnupg2`.
  2. Create configuration directory and edit [GPG configuration](https://github.com/crimsonpython24/macos-setup/blob/master/shell/gpg.conf).
 ```fish
+exit    # or su - warren
 mkdir -p ~/.gnupg
 chmod 700 ~/.gnupg
 vi ~/.gnupg/gpg.conf
-# Edit file
+# Paste content
 ```
  3. Give permissions and check for syntax errors:
 ```fish
