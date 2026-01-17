@@ -1,6 +1,6 @@
 # macOS Setup
 
-Total time needed (from empty system): 70-90 mins, depending on Internet connection
+Total time needed (from empty system): 16:20, depending on Internet connection.
 
 ## 0. Basics
  - `launchd` should not be modified like `systemctl` as the former is not designed for user tweaks
@@ -48,17 +48,17 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. CLI Tools
- > Until section 7, this tutorial should be done in admin's GUI because Part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there. Run `su - warren` if testing path or commands in that user.
+ > Until section 7, this tutorial should be done in admin's GUI because part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there, even if switched to warren in admin's terminal. Run `su - warren` if testing path or commands in that user.
 
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion (technically port can only be installed in admin because it needs sudo access, but still).
- - After `xcode-select --install`, install [MacPorts package](https://www.macports.org/install.php).
+ - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php).
 
 ## 2. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
 
  > Remember to create the non-privileged user first to ensure sections 2-4 also apply to it without having to double-check later.
 
- 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works.
+ 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. Also go to Settings > "Menu Bar" > "Fast User Switching" and toggle it on. Switch back to admin's GUI.
  2. Add MacPorts to warren's shells:
 ```zsh
 su - warren
@@ -83,7 +83,7 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
 ```zsh
-/opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
+sudo vi /opt/local/share/dnscrypt-proxy/dnscrypt-proxy.toml
 # Paste content
 ```
  3. Edit the property list to give DNSCrypt startup access:
@@ -156,7 +156,7 @@ scutil --dns | head -10
  > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
  1. Unbound should already be installed in 2(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations stored from 2(B) ([here](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) once again)into Unbound:
+ 2. Copy the configurations stored from 2(B) ([here](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) once again) into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
 # Paste content
@@ -174,26 +174,31 @@ sudo lsof +c 15 -Pni UDP:53
 ```
  5. Test Unbound dnssec:
 ```zsh
-sudo dscacheutil -flushcache
-sudo killall -HUP mDNSResponder
+sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder
 
 # First query - should have 'ad' flag
 dig @127.0.0.1 dnssec.works
 
 # Second query (cached) - should STILL have 'ad' flag
 dig @127.0.0.1 dnssec.works
+# ;; flags: qr rd ra ad;
 
 # Third query - 'ad' flag should persist
 dig @127.0.0.1 dnssec.works
 
-# Test DNSSEC validation - this should FAIL
+# Test without DNS argument - should still go through 127.0.0.1#53
+dig dnssec.works
+# ;; SERVER: 127.0.0.1#53(127.0.0.1)
+
+# Test DNSSEC validation - should fail
 dig @127.0.0.1 fail01.dnssec.works
+# ;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL
 ```
 ```zsh
 unbound-host -vDr test.dnscheck.tools
-test.dnscheck.tools has address xx.xx.xx.xx (secure)
-test.dnscheck.tools has IPv6 address xx:xx:xx:xx:xx:xx (secure)
-test.dnscheck.tools mail is handled by 0 . (secure)
+# test.dnscheck.tools has address xx.xx.xx.xx (secure)
+# test.dnscheck.tools has IPv6 address xx:xx:xx:xx:xx:xx (secure)
+# test.dnscheck.tools mail is handled by 0 . (secure)
 
 unbound-host -vDr badsig.test.dnscheck.tools
 # ... (BOGUS (security failure))
@@ -209,7 +214,7 @@ dig DNSKEY archlinux.org
 # ;; QUESTION SECTION:
 # ;archlinux.org.			IN	DNSKEY
 # 
-# No answer section!
+# (!! No answer section !!)
 # 
 # ;; AUTHORITY SECTION:
 # archlinux.org.		3600	IN	SOA	hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010201 86400 10800 3600000 3600
@@ -251,7 +256,7 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
     - "Login Items & Extensions" > "Extensions" > "By App" > toggle "Santa"
     - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" toggle Santa daemon
     - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
- 3. Quit and re-open the terminal to check if Santa is running:
+ 3. Quit and re-open the terminal and check if Santa is running:
 ```zsh
 sudo santactl doctor
 ```
@@ -297,7 +302,7 @@ santactl fileinfo /System/Applications/Dictionary.app
 sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
 # Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
 ```
- 7. Certain files should be blocked by the FAA policy (because they should be immutable after initialization), e.g.,
+ 7. Certain files should be blocked by the FAA policy (because they should be immutable after being initialized), e.g.,
 ```zsh
 # Will be created in section 7
 cat ~/.ssh/github_ed25519
@@ -321,7 +326,7 @@ vi cnssi-1253_cust.yaml
 # Paste content
 ```
  2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
- 3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip.
+ 3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip package.
 ```zsh
 sudo port install python314
 sudo port select --set python python314
@@ -366,10 +371,10 @@ pip --version
 # pip 25.3 from /opt/local/Library
 exit
 ```
- 5. Remove `warren` from the FileVault authorized users group to ensure that only admin can unlock FV (so in a double-auth, the first login must be admin):
+ 5. Remove `warren` from the FileVault authorized users group to ensure that only admin can unlock FV (so during double-auth, the first login must be admin to unlock FileVault before logging in as warren):
 ```zsh
 sudo fdesetup list
-sudo fdesetup remove -user <username>
+sudo fdesetup remove -user warren
 ```
  6. Optional: load custom ODVs (organization-defined values)
 ```zsh
@@ -402,7 +407,7 @@ python3 scripts/generate_guidance.py \
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
- 9. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 15%.
+ 9. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 18%. Exit the script.
  10. Install the configuration profile in the Settings app:
 ```zsh
 sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
@@ -413,13 +418,16 @@ sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobilecon
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
  13. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
- 14. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 15. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+ 14. Exit the script first to ensure that sudo access persists (it is shortened in the new CNSSI profile).
+ 15. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 16. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
 ```zsh
 os_firewall_default_deny_require
 system_settings_filevault_enforce
 ```
- 16. Go inside Settings and manually toggle these two options, the first one as "Block all incoming connections" in "Network" > "Firewall" > "Options", and the second one by enabling "Filevault" under "Privacy and Security" > "Security". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
+ 17. Go inside Settings and manually toggle these two options:
+      - Enable "Filevault" under "Privacy and Security" > "Security". Wait until the encryption finishes.
+      - "Block all incoming connections" in "Network" > "Firewall" > "Options". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
 ```zsh
 ls includes/enablePF-mscp.sh
 sudo bash includes/enablePF-mscp.sh
@@ -432,12 +440,12 @@ sudo pfctl -s info
 # FileVault
 sudo fdesetup status
 ```
- 17. Note from previous step: one might encounter these two warnings.
+ 18. Note from previous step: one might encounter these two warnings.
       - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
       - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 18. The script should yield 100% compliance by running option 2, then option 1.
- 19. Restart the device at this point.
- 20. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
+ 19. The script should yield 100% compliance by running option 2, then option 1.
+ 20. Restart the device at this point.
+ 21. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
 ```zsh
 sudo zsh ~/Desktop/Profiles/macos_security-tahoe/build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```
