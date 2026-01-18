@@ -1,6 +1,6 @@
 # macOS Setup
 
-Total time needed (from empty system): 16:20, depending on Internet connection.
+Total time needed (from empty system): 13:46, depending on Internet connection.
 
 ## 0. Basics
  - `launchd` should not be modified like `systemctl` as the former is not designed for user tweaks
@@ -48,17 +48,17 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. CLI Tools
- > Until section 7, this tutorial should be done in admin's GUI because part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there, even if switched to warren in admin's terminal. Run `su - warren` if testing path or commands in that user.
+ > Until section 7, this tutorial should be done in admin's GUI because part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there, even if switched to warren in admin's terminal. `su - warren` only works with testing path or commands in that user.
 
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion (technically port can only be installed in admin because it needs sudo access, but still).
- - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php).
+ - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php). Restart Terminal.
 
 ## 2. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
 
  > Remember to create the non-privileged user first to ensure sections 2-4 also apply to it without having to double-check later.
 
- 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the account works. Also go to Settings > "Menu Bar" > "Fast User Switching" and toggle it on. Switch back to admin's GUI.
+ 1. First create the Warren user (hello!). Log in, go through the setup, and make sure the Warren account works. Also go to Settings > "Menu Bar" > "Fast User Switching" and toggle it on. Switch back to admin's GUI.
  2. Add MacPorts to warren's shells:
 ```zsh
 su - warren
@@ -68,7 +68,7 @@ exit
 ```
 
 ### A) Hosts File
- - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`; this step can also be done in Little Snitch.
+ - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`.
 ```zsh
 curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee -a /etc/hosts
 ```
@@ -801,7 +801,7 @@ git config --global gpg.program gpg2
 echo "set -gx GPG_TTY (tty)" >> ~/.config/fish/config.fish
 ```
 
-### C) Blocking Metadata Creation
+### C) Blocking Metadata Creation†
  1. Remove sensitive information even when user dictionary/suggestions are off and prevent them from being re-created:
 ```fish
 rm -rfv "~/Library/LanguageModeling/*" "~/Library/Spelling/*" "~/Library/Suggestions/*"
