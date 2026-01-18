@@ -17,19 +17,13 @@
   <key>PayloadContent</key>
   <array>
     <dict>
-      <!-- Core Security -->
-      <key>FailClosed</key>
-      <true/>
       <key>EnableBadSignatureProtection</key>
       <true/>
       <key>EnablePageZeroProtection</key>
       <true/>
       <key>EnableTransitiveRules</key>
       <true/>
-      <key>EnableSystemExtensionProtection</key>
-      <true/>
       
-      <!-- USB Hardening -->
       <key>BlockUSBMount</key>
       <false/>
       <key>RemountUSBMode</key>
@@ -41,15 +35,15 @@
       <key>OnStartUSBOptions</key>
       <string>ForceRemount</string>
       
-      <!-- File Access Authorization -->
       <key>FileAccessPolicyPlist</key>
       <string>/var/db/santa/faa_policy.plist</string>
       <key>FileAccessPolicyUpdateIntervalSec</key>
       <integer>300</integer>
       
-      <!-- Messages -->
-      <key>BlockMessage</key>
+      <key>BannedBlockMessage</key>
       <string>This application has been blocked by Santa security policy.</string>
+      <key>UnknownBlockMessage</key>
+      <string>This application is not recognized and has been blocked.</string>
       <key>BannedUSBBlockMessage</key>
       <string>This USB device has been blocked by security policy.</string>
       <key>RemountUSBBlockMessage</key>
@@ -57,7 +51,6 @@
       <key>FileAccessBlockMessage</key>
       <string>File access blocked by security policy.</string>
       
-      <!-- Notifications -->
       <key>EnableNotificationSilences</key>
       <false/>
       <key>EnableSilentMode</key>
@@ -65,13 +58,11 @@
       <key>EnableSilentTTYMode</key>
       <false/>
       
-      <!-- Telemetry -->
       <key>Telemetry</key>
       <array>
         <string>Everything</string>
       </array>
       
-      <!-- Payload identifiers -->
       <key>PayloadDisplayName</key>
       <string>Santa</string>
       <key>PayloadIdentifier</key>
