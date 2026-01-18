@@ -981,12 +981,6 @@
         <array>
           <dict>
             <key>Path</key>
-            <string>/Users/*/Library/Spotlight</string>
-            <key>IsPrefix</key>
-            <true />
-          </dict>
-          <dict>
-            <key>Path</key>
             <string>/Library/Spotlight</string>
             <key>IsPrefix</key>
             <true />
