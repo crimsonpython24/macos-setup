@@ -1,32 +1,3 @@
-# ~/.ssh/config - Hardened SSH Client Configuration
-# Based on: sshaudit.com (Oct 2024), drduh/config, Mozilla OpenSSH Guidelines
-# For: macOS outgoing connections only (no sshd)
-#
-# IMPORTANT: More specific Host blocks must come BEFORE the wildcard Host * block
-# because SSH uses the first matching value for each parameter.
-
-# =============================================================================
-# HOST-SPECIFIC CONFIGURATIONS
-# =============================================================================
-
-# Examples (uncomment and modify as needed):
-#
-# Host myserver
-#     HostName 192.168.1.100
-#     Port 22
-#     User myuser
-#     IdentityFile ~/.ssh/myserver_ed25519
-#
-# Host router
-#     HostName 192.168.1.1
-#     Port 2222
-#     User admin
-#     IdentityFile ~/.ssh/router_ed25519
-
-# -----------------------------------------------------------------------------
-# Git Hosting Services
-# -----------------------------------------------------------------------------
-
 Host gitlab.com
     User git
     HostName gitlab.com
@@ -41,125 +12,67 @@ Host github.com
     IdentityFile ~/.ssh/github_ed25519
     IdentitiesOnly yes
     ControlMaster no
-    # Prefer Ed25519, fall back to ECDSA if needed
     HostKeyAlgorithms ssh-ed25519,ecdsa-sha2-nistp256
     MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
 
-# =============================================================================
-# GLOBAL DEFAULTS
-# =============================================================================
-
 Host *
-    # -------------------------------------------------------------------------
-    # macOS Keychain Integration
-    # -------------------------------------------------------------------------
-    AddKeysToAgent yes
+    AddKeysToAgent confirm
     UseKeychain yes
-
-    # -------------------------------------------------------------------------
-    # Protocol & Address
-    # -------------------------------------------------------------------------
     AddressFamily inet
-
-    # -------------------------------------------------------------------------
-    # Cryptographic Algorithms
-    # -------------------------------------------------------------------------
-    # Key Exchange: Post-quantum hybrid first, then curve25519
-    KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256
-
-    # Ciphers: ChaCha20 for performance, AES-256 for quantum resistance
-    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-gcm@openssh.com,aes128-ctr
-
-    # MACs: ETM variants only
+    KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
     MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
+    HostKeyAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512
+    PubkeyAcceptedAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512
+    CASignatureAlgorithms sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512
 
-    # Host Key Algorithms: Ed25519 preferred, then RSA-SHA2
-    HostKeyAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
-
-    # Pubkey algorithms for authentication
-    PubkeyAcceptedAlgorithms sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256
-
-    # CA Signature Algorithms
-    CASignatureAlgorithms sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256
-
-    # -------------------------------------------------------------------------
-    # Authentication
-    # -------------------------------------------------------------------------
     PubkeyAuthentication yes
     PasswordAuthentication no
     KbdInteractiveAuthentication no
     ChallengeResponseAuthentication no
     HostbasedAuthentication no
     GSSAPIAuthentication no
+    GSSAPIDelegateCredentials no
     PreferredAuthentications publickey
     IdentitiesOnly yes
+    NumberOfPasswordPrompts 0
 
-    # -------------------------------------------------------------------------
-    # Security: Forwarding
-    # -------------------------------------------------------------------------
     ForwardAgent no
     ForwardX11 no
     ForwardX11Trusted no
     PermitLocalCommand no
+    Tunnel no
+    PermitRemoteOpen none
 
-    # -------------------------------------------------------------------------
-    # Host Key Verification
-    # -------------------------------------------------------------------------
     StrictHostKeyChecking ask
     VerifyHostKeyDNS yes
     CheckHostIP yes
     FingerprintHash sha256
     UpdateHostKeys yes
 
-    # -------------------------------------------------------------------------
-    # Privacy
-    # -------------------------------------------------------------------------
     HashKnownHosts yes
     VisualHostKey yes
-
-    # -------------------------------------------------------------------------
-    # Hostname Canonicalization
-    # -------------------------------------------------------------------------
+    ObscureKeystrokeTiming interval:80
+    EscapeChar none
+    EnableEscapeCommandline no
     CanonicalizeHostname yes
     CanonicalizeFallbackLocal yes
 
-    # -------------------------------------------------------------------------
-    # Connection Keepalive
-    # -------------------------------------------------------------------------
+    TCPKeepAlive no
     ServerAliveInterval 60
     ServerAliveCountMax 3
-
-    # -------------------------------------------------------------------------
-    # Connection Multiplexing
-    # -------------------------------------------------------------------------
     ControlMaster auto
     ControlPath ~/.ssh/sockets/%C
-    ControlPersist 600
-
-    # -------------------------------------------------------------------------
-    # Forward Secrecy
-    # -------------------------------------------------------------------------
+    ControlPersist 60
+    ConnectTimeout 30
+    ChannelTimeout global=1800
     RekeyLimit 1G 1h
 
-    # -------------------------------------------------------------------------
-    # Network & Performance
-    # -------------------------------------------------------------------------
     Compression no
     IPQoS af21 cs1
-    ConnectTimeout 30
     ExitOnForwardFailure yes
     StreamLocalBindUnlink yes
-
-    # -------------------------------------------------------------------------
-    # Logging
-    # -------------------------------------------------------------------------
-    LogLevel INFO
-    NumberOfPasswordPrompts 0
-
-    # -------------------------------------------------------------------------
-    # Additional Hardening
-    # -------------------------------------------------------------------------
-    RequiredRSASize 3072
-    SetEnv TERM=xterm-256color
     ProxyUseFdpass no
-    GSSAPIDelegateCredentials no
+    RequiredRSASize 4096
+    SetEnv TERM=xterm-256color
+    LogLevel VERBOSE
