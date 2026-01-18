@@ -1,79 +1,73 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-  <key>PayloadDisplayName</key>
-  <string>Santa Configuration</string>
-  <key>PayloadEnabled</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadScope</key>
-  <string>System</string>
-  <key>PayloadUUID</key>
-  <string>8b323321-38a6-4500-998f-17621667a43f</string>
-  <key>PayloadIdentifier</key>
-  <string>54ebd0c1-f768-4eb9-abc2-0ffb7d0e5403</string>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>EnableBadSignatureProtection</key>
-      <true/>
-      <key>EnablePageZeroProtection</key>
-      <true/>
-      <key>EnableTransitiveRules</key>
-      <true/>
-      
-      <key>BlockUSBMount</key>
-      <false/>
-      <key>RemountUSBMode</key>
-      <array>
-        <string>noexec</string>
-        <string>nosuid</string>
-        <string>nodev</string>
-      </array>
-      <key>OnStartUSBOptions</key>
-      <string>ForceRemount</string>
-      
-      <key>FileAccessPolicyPlist</key>
-      <string>/var/db/santa/faa_policy.plist</string>
-      <key>FileAccessPolicyUpdateIntervalSec</key>
-      <integer>300</integer>
-      
-      <key>BannedBlockMessage</key>
-      <string>This application has been blocked by Santa security policy.</string>
-      <key>UnknownBlockMessage</key>
-      <string>This application is not recognized and has been blocked.</string>
-      <key>BannedUSBBlockMessage</key>
-      <string>This USB device has been blocked by security policy.</string>
-      <key>RemountUSBBlockMessage</key>
-      <string>This USB device has been remounted with restricted permissions.</string>
-      <key>FileAccessBlockMessage</key>
-      <string>File access blocked by security policy.</string>
-      
-      <key>EnableNotificationSilences</key>
-      <false/>
-      <key>EnableSilentMode</key>
-      <false/>
-      <key>EnableSilentTTYMode</key>
-      <false/>
-      
-      <key>Telemetry</key>
-      <array>
-        <string>Everything</string>
-      </array>
-      
-      <key>PayloadDisplayName</key>
-      <string>Santa</string>
-      <key>PayloadIdentifier</key>
-      <string>com.northpolesec.santa.82208781-d97a-4f35-bea7-54515e4e284f</string>
-      <key>PayloadUUID</key>
-      <string>4e89bdd4-7f7a-4c0f-a503-ebbcc674cfbe</string>
-      <key>PayloadType</key>
-      <string>com.northpolesec.santa</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-    </dict>
-  </array>
-</dict>
+	<dict>
+		<key>PayloadDisplayName</key>
+		<string>Santa Configuration</string>
+		<key>PayloadEnabled</key>
+		<true/>
+		<key>PayloadType</key>
+		<string>Configuration</string>
+		<key>PayloadScope</key>
+		<string>System</string>
+		<key>PayloadUUID</key>
+		<string>8b323321-38a6-4500-998f-17621667a43f</string>
+		<key>PayloadIdentifier</key>
+		<string>54ebd0c1-f768-4eb9-abc2-0ffb7d0e5403</string>
+		<key>PayloadContent</key>
+		<array>
+			<dict>
+				<key>EnableBadSignatureProtection</key>
+				<true/>
+				<key>EnablePageZeroProtection</key>
+				<true/>
+				<key>EnableTransitiveRules</key>
+				<true/>
+				<key>BlockUSBMount</key>
+				<false/>
+				<key>RemountUSBMode</key>
+				<array>
+					<string>noexec</string>
+					<string>nosuid</string>
+					<string>nodev</string>
+				</array>
+				<key>OnStartUSBOptions</key>
+				<string>ForceRemount</string>
+				<key>FileAccessPolicyPlist</key>
+				<string>/var/db/santa/faa_policy.plist</string>
+				<key>FileAccessPolicyUpdateIntervalSec</key>
+				<integer>300</integer>
+				<key>BannedBlockMessage</key>
+				<string>This application has been blocked by Santa security policy.</string>
+				<key>UnknownBlockMessage</key>
+				<string>This application is not recognized and has been blocked.</string>
+				<key>BannedUSBBlockMessage</key>
+				<string>This USB device has been blocked by security policy.</string>
+				<key>RemountUSBBlockMessage</key>
+				<string>This USB device has been remounted with restricted permissions.</string>
+				<key>FileAccessBlockMessage</key>
+				<string>File access blocked by security policy.</string>
+				<key>EnableNotificationSilences</key>
+				<false/>
+				<key>EnableSilentMode</key>
+				<false/>
+				<key>EnableSilentTTYMode</key>
+				<false/>
+				<key>Telemetry</key>
+				<array>
+					<string>Everything</string>
+				</array>
+				<key>PayloadDisplayName</key>
+				<string>Santa</string>
+				<key>PayloadIdentifier</key>
+				<string>com.northpolesec.santa.82208781-d97a-4f35-bea7-54515e4e284f</string>
+				<key>PayloadUUID</key>
+				<string>4e89bdd4-7f7a-4c0f-a503-ebbcc674cfbe</string>
+				<key>PayloadType</key>
+				<string>com.northpolesec.santa</string>
+				<key>PayloadVersion</key>
+				<integer>1</integer>
+			</dict>
+		</array>
+	</dict>
 </plist>
