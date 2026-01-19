@@ -176,52 +176,6 @@
           </dict>
         </array>
       </dict>
-      <key>SafariSecrets</key>
-      <dict>
-        <key>Paths</key>
-        <array>
-          <dict>
-            <key>Path</key>
-            <string>/Users/*/Library/Cookies/Cookies.binarycookies</string>
-          </dict>
-          <dict>
-            <key>Path</key>
-            <string>/Users/*/Library/Safari/LocalStorage</string>
-            <key>IsPrefix</key>
-            <true />
-          </dict>
-        </array>
-        <key>Options</key>
-        <dict>
-          <key>AllowReadAccess</key>
-          <false />
-          <key>AuditOnly</key>
-          <false />
-          <key>RuleType</key>
-          <string>PathsWithAllowedProcesses</string>
-        </dict>
-        <key>Processes</key>
-        <array>
-          <dict>
-            <key>SigningID</key>
-            <string>com.apple.Safari</string>
-            <key>PlatformBinary</key>
-            <true />
-          </dict>
-          <dict>
-            <key>SigningID</key>
-            <string>com.apple.WebKit.Networking</string>
-            <key>PlatformBinary</key>
-            <true />
-          </dict>
-          <dict>
-            <key>SigningID</key>
-            <string>com.apple.mdworker_shared</string>
-            <key>PlatformBinary</key>
-            <true />
-          </dict>
-        </array>
-      </dict>
       <key>SlackSecrets</key>
       <dict>
         <key>Paths</key>
@@ -525,38 +479,6 @@
             <string>com.apple.nano</string>
             <key>PlatformBinary</key>
             <true />
-          </dict>
-        </array>
-      </dict>
-      <key>GPGPrivateKeys</key>
-      <dict>
-        <key>Paths</key>
-        <array>
-          <dict>
-            <key>Path</key>
-            <string>/Users/*/.gnupg/private-keys-v1.d</string>
-            <key>IsPrefix</key>
-            <true />
-          </dict>
-        </array>
-        <key>Options</key>
-        <dict>
-          <key>AllowReadAccess</key>
-          <false />
-          <key>AuditOnly</key>
-          <false />
-          <key>RuleType</key>
-          <string>PathsWithAllowedProcesses</string>
-        </dict>
-        <key>Processes</key>
-        <array>
-          <dict>
-            <key>BinaryPath</key>
-            <string>/opt/local/bin/gpg2</string>
-          </dict>
-          <dict>
-            <key>BinaryPath</key>
-            <string>/opt/local/bin/gpg-agent</string>
           </dict>
         </array>
       </dict>
