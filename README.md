@@ -1,6 +1,6 @@
 # macOS Setup
 
-Total time needed (from empty system): 13:46, depending on Internet connection.
+Total time needed (from empty system): 4:40-, depending on Internet connection.
 
 ## 0. Basics
  - `launchd` should not be modified like `systemctl` as the former is not designed for user tweaks
@@ -14,7 +14,7 @@ Total time needed (from empty system): 13:46, depending on Internet connection.
  - Terminal
    - Ensure that [Secure keyboard](https://fig.io/docs/support/secure-keyboard-input) (in Terminal and iTerm) is enabled
    - Use MacPorts [instead of](https://saagarjha.com/blog/2019/04/26/thoughts-on-macos-package-managers/) Brew
-   - Implement some more hardware hardening:
+   - Implement some hardware hardening:
 ```zsh
 # Cold boot attacks
 sudo pmset -a destroyfvkeyonstandby 1
@@ -48,10 +48,10 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
 <sup>https://github.com/beerisgood/macOS_Hardening?tab=readme-ov-file</sup>
 
 ## 1. CLI Tools
- > Until section 7, this tutorial should be done in admin's GUI because part (4) requires running a privileged script, but admin cannot read/write warren's files if downloaded there, even if switched to warren in admin's terminal. `su - warren` only works with testing path or commands in that user.
+ > Until section 7, this tutorial should be done in admin's GUI because some sections require running a privileged script, but admin cannot read/write warren's files if downloaded there, even if switched to warren in admin's terminal. I.e., the only way that works is to download and run `sudo` in admin's GUI. `su - warren` does not work with all commands in that user.
 
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion (technically port can only be installed in admin because it needs sudo access, but still).
- - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php). Restart Terminal.
+ - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php). Quit and re-open Terminal.
 
 ## 2. DNS Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
@@ -150,7 +150,7 @@ scutil --dns | head -10
 ```
  7. Again, since this guide routes `dnscrypt-proxy` to port 54, there will not be Internet connection until after section 2(C)
 
-**Note** `dnscrypt-proxy` will take ~15 seconds to load on startup, so there might not be connection immediately after session login.
+**Note** `dnscrypt-proxy` could take ~30 seconds to load on re-wake and startup, so there might not be connection immediately after session login.
 
 ### C) Unbound
  > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
@@ -186,7 +186,7 @@ dig @127.0.0.1 dnssec.works
 # Third query - 'ad' flag should persist
 dig @127.0.0.1 dnssec.works
 
-# Test without DNS argument - should still go through 127.0.0.1#53
+# Test without DNS argument - should still go through 127.0.0.1#53 with `ad` flag
 dig dnssec.works
 # ;; SERVER: 127.0.0.1#53(127.0.0.1)
 
@@ -320,7 +320,7 @@ sudo santactl rule --export santa1.json
 
  1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
 ```zsh
-cd build
+cd macos_security-tahoe/build
 mkdir baselines && cd baselines
 vi cnssi-1253_cust.yaml
 # Paste content
@@ -329,8 +329,7 @@ vi cnssi-1253_cust.yaml
  3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip package.
 ```zsh
 sudo port install python314
-sudo port select --set python python314
-sudo port select --set python3 python314
+sudo port select --set python python314 && sudo port select --set python3 python314
 # For admin's shell
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
@@ -343,8 +342,7 @@ python3 --version
 # Python 3.14.2
 
 sudo port install py314-pip 
-sudo port select --set pip pip314
-sudo port select --set pip3 pip314
+sudo port select --set pip pip314 && sudo port select --set pip3 pip314
 rehash (zsh) / hash -r (bash)
 pip --version
 # pip 25.3
@@ -355,8 +353,7 @@ pip3 --version
 cd ~/Desktop/Profiles/macos_security-tahoe
 python3 -m venv venv
 source venv/bin/activate
-python3 -m pip install --upgrade pip
-pip3 install pyyaml xlwt
+python3 -m pip install --upgrade pip && pip3 install pyyaml xlwt
 ```
  4. Small tangent: also check if MacPort libs also work in warren.
 ```zsh
@@ -375,8 +372,10 @@ exit
 ```zsh
 sudo fdesetup list
 sudo fdesetup remove -user warren
+sudo fdesetup list
+# Should only have admin
 ```
- 6. Optional: load custom ODVs (organization-defined values)
+ 6. Load custom ODVs (organization-defined values)
 ```zsh
 cd ~/Desktop/Profiles/macos_security-tahoe
 
@@ -412,7 +411,7 @@ sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
 ```zsh
 sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
 ```
- 11. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites the default value for that field.
+ 11. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites NIST guideline's default value for that field.
  12. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
 ```zsh
 sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
