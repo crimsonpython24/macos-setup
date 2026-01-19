@@ -490,12 +490,6 @@
             <key>Path</key>
             <string>/Users/*/.ssh/authorized_keys</string>
           </dict>
-          <dict>
-            <key>Path</key>
-            <string>/private/etc/ssh</string>
-            <key>IsPrefix</key>
-            <true />
-          </dict>
         </array>
         <key>Options</key>
         <dict>
@@ -657,44 +651,6 @@
           <dict>
             <key>SigningID</key>
             <string>com.apple.installer</string>
-            <key>PlatformBinary</key>
-            <true />
-          </dict>
-        </array>
-      </dict>
-      <key>AuthorizationDB</key>
-      <dict>
-        <key>Paths</key>
-        <array>
-          <dict>
-            <key>Path</key>
-            <string>/private/var/db/auth.db</string>
-          </dict>
-          <dict>
-            <key>Path</key>
-            <string>/private/var/db/auth.db-journal</string>
-          </dict>
-        </array>
-        <key>Options</key>
-        <dict>
-          <key>AllowReadAccess</key>
-          <false />
-          <key>AuditOnly</key>
-          <false />
-          <key>RuleType</key>
-          <string>PathsWithAllowedProcesses</string>
-        </dict>
-        <key>Processes</key>
-        <array>
-          <dict>
-            <key>SigningID</key>
-            <string>com.apple.authd</string>
-            <key>PlatformBinary</key>
-            <true />
-          </dict>
-          <dict>
-            <key>SigningID</key>
-            <string>com.apple.security</string>
             <key>PlatformBinary</key>
             <true />
           </dict>
