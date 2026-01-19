@@ -636,14 +636,10 @@ fish_add_path /opt/local/sbin
 ```fish
 fisher install jethrokuan/z    # Example
 ```
- 8. Configure `fzf` key bindings (note: this step will throw an error if `fzf.fish` is not installed, which one can directly skip):
+ 8. Download Node: `nvm install lts`.
+ 9. Add custom functions:
 ```fish
-echo "fzf_configure_bindings --directory=\cf --git_log=\cl --git_status=\cs --history=\cr --processes=\cp --variables=\cv" >> ~/.config/fish/config.fish
-```
- 9. Download Node: `nvm install lts`.
- 10. Add custom functions:
-```fish
-~/.config/fish/functions/mkcd.fish
+vi ~/.config/fish/functions/mkcd.fish
 
 function mkcd
     mkdir -p $argv[1] && cd $argv[1]
@@ -670,14 +666,14 @@ function uext
     find . -type f | perl -ne 'print $1 if m/\.([^.\/]+)$/' | sort -u
 end
 ```
- 11. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/config.fish).
+ 10. Install tide with `fisher install IlanCosman/tide@v6` and add in [custom configurations](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/config.fish).
      - In the initial config, select "Classic" (step 1), "Dark" (step 3), and "24-hour format" (step 4). All other options can go with default.
      - Also edit the [custom item context](https://github.com/crimsonpython24/macos-setup/blob/master/shell/fish/_tide_item_context.fish) to complete this setup. Restart Terminal for both changes to take effect.
 ```fish
 vi ~/.config/fish/config.fish
 vi ~/.config/fish/functions/_tide_item_context.fish
 ```
- 12. Install [Amix's vim configuration](https://github.com/amix/vimrc):
+ 11. Install [Amix's vim configuration](https://github.com/amix/vimrc):
 ```fish
 git clone --depth=1 https://github.com/amix/vimrc.git ~/.vim_runtime
 sh ~/.vim_runtime/install_awesome_vimrc.sh
@@ -783,10 +779,6 @@ git config --global commit.gpgsign true
 git config --global gpg.program gpg2
 git config --global user.name "Yu-Jen Warren Wang"
 git config --global user.email "private-email@goes.here"
-```
- 9. Add TTY to fish:
-```fish
-echo "set -gx GPG_TTY (tty)" >> ~/.config/fish/config.fish
 ```
 
 ## Footnotes
