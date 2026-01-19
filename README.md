@@ -17,14 +17,7 @@ Total time needed (from empty system): 4:40-, depending on Internet connection.
    - Implement some hardware hardening:
 ```zsh
 # Cold boot attacks
-sudo pmset -a destroyfvkeyonstandby 1
-sudo pmset -a hibernatemode 25
-sudo pmset -a standbydelaylow 0
-sudo pmset -a standbydelayhigh 0
-sudo pmset -a highstandbythreshold 0
-sudo pmset -a powernap 0
-sudo pmset -a tcpkeepalive 0
-sudo pmset -a proximitywake 0
+sudo pmset -a destroyfvkeyonstandby 1 hibernatemode 25 standbydelaylow 0 standbydelayhigh 0 highstandbythreshold 0 powernap 0 tcpkeepalive 0 proximitywake 0
 
 # Reduce unified log retention
 sudo log config --mode "level:off" --subsystem com.apple.diagnosticd
@@ -53,7 +46,7 @@ defaults read /Library/Preferences/com.apple.virtualMemory UseEncryptedSwap
  - Install xcode CLI tools/MacPorts in only one account (admin) to prevent duplicate instances and PATH confusion (technically port can only be installed in admin because it needs sudo access, but still).
  - After `xcode-select --install`, install [MacPorts](https://www.macports.org/install.php). Quit and re-open Terminal.
 
-## 2. DNS Setup
+## 2. Santa Setup
  > For the following sections, all dependencies can be installed via MacPorts. Avoid using third-party pkg/dmg installers to keep dependency tree clean.
 
  > Remember to create the non-privileged user first to ensure sections 2-4 also apply to it without having to double-check later.
@@ -66,7 +59,315 @@ echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
 echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
 exit
 ```
+ 3. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases).
+ 4. Grant permissions:
+    - "Login Items & Extensions" > "App Background Activity" add Santa.app
+    - "Login Items & Extensions" > "Extensions" > "By App" > toggle "Santa"
+    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" toggle Santa daemon
+    - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
+ 5. Quit and re-open the terminal and check if Santa is running:
+```zsh
+sudo santactl doctor
+```
+ 6. Add a custom [FAA policy](https://github.com/crimsonpython24/macos-setup/blob/master/policies/faa_policy.plist):
+```zsh
+sudo mkdir -p /var/db/santa
+sudo vi /var/db/santa/faa_policy.plist
+# Paste content
 
+sudo chmod 644 /var/db/santa/faa_policy.plist
+sudo chown root:wheel /var/db/santa/faa_policy.plist
+```
+ 7. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 4) because NIST configurations block adding new profiles.
+```zsh
+cd ~/Desktop && mkdir Profiles && cd Profiles
+vi santa.mobileconfig
+# Paste content
+
+sudo open santa.mobileconfig
+```
+ 8. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/policies/prefs/santa_base.json)):
+```zsh
+santactl fileinfo /System/Applications/Dictionary.app 
+# Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
+# SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+# SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
+# Bundle Name            : Dictionary
+# Bundle Version         : 294
+# Bundle Version Str     : 2.3.0
+# Signing ID             : platform:com.apple.Dictionary
+
+# Use signing ID (will not change even with app update)
+sudo santactl rule \
+  --block \
+  --signingid \
+  --identifier platform:com.apple.Dictionary
+
+santactl fileinfo /System/Applications/Dictionary.app 
+# Rule                   : Blocked (SigningID)
+```
+```zsh
+# Deprecated appproach: sha-256
+sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
+# Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
+```
+ 9. Certain files should be blocked by the FAA policy (because they should be immutable after being initialized), e.g.,
+```zsh
+# Will be created in section 7
+cat ~/.ssh/github_ed25519
+```
+ 10. When importing/exporting rules, use:
+```zsh
+sudo santactl rule --export santa1.json
+```
+
+## 3. mSCP Setup
+ > [!IMPORTANT]
+ > The NIST security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
+
+ > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
+
+ 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
+```zsh
+cd macos_security-tahoe/build
+mkdir baselines && cd baselines && vi cnssi-1253_cust.yaml
+# Paste content
+```
+ 2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
+ 3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip package.
+```zsh
+sudo port install python314
+sudo port select --set python python314 && sudo port select --set python3 python314
+# For admin's shell
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
+echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
+source ~/.zshrc
+source ~/.bash_profile
+
+python --version
+# Python 3.14.2
+python3 --version
+# Python 3.14.2
+
+sudo port install py314-pip 
+sudo port select --set pip pip314 && sudo port select --set pip3 pip314
+rehash (zsh) / hash -r (bash)
+pip --version
+# pip 25.3
+pip3 --version
+# pip 25.3
+```
+```zsh
+cd ~/Desktop/Profiles/macos_security-tahoe
+python3 -m venv venv && source venv/bin/activate
+python3 -m pip install --upgrade pip && pip3 install pyyaml xlwt
+```
+ 4. Small tangent: also check if MacPort libs also work in warren.
+```zsh
+su - warren
+python3 --version
+# Python 3.14.2
+python --version
+# Python 3.14.2
+pip3 --version
+# pip 25.3 from /opt/local/Library
+pip --version
+# pip 25.3 from /opt/local/Library
+exit
+```
+ 5. Remove `warren` from the FileVault authorized users group to ensure that only admin can unlock FV (so during double-auth, the first login must be admin to unlock FileVault before logging in as warren):
+```zsh
+sudo fdesetup list
+sudo fdesetup remove -user warren
+sudo fdesetup list
+# Should only have admin
+```
+ 6. Load custom ODVs (organization-defined values)
+```zsh
+cd ~/Desktop/Profiles/macos_security-tahoe
+
+cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
+odv:
+  custom: 12
+EOF
+
+cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
+odv:
+  custom: 5
+EOF
+
+cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
+odv:
+  custom: 0
+EOF
+```
+ 7. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
+```zsh
+python3 scripts/generate_guidance.py \
+        -P \
+        -s \
+        -p \
+    build/baselines/cnssi-1253_cust.yaml
+```
+ 8. If there is a previous configuration profile installed, remove it in Settings.app first. Run the compliance script.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 9. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 18%. Exit the script.
+ 10. Install the configuration profile in the Settings app:
+```zsh
+sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
+```
+ 11. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites NIST guideline's default value for that field.
+ 12. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
+```zsh
+sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 13. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
+ 14. Exit the script first to ensure that sudo access persists (it is shortened in the new CNSSI profile).
+ 15. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
+ 16. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
+```zsh
+os_firewall_default_deny_require
+system_settings_filevault_enforce
+```
+ 17. Go inside Settings and manually toggle these two options:
+      - Enable "Filevault" under "Privacy and Security" > "Security". Wait until the encryption finishes.
+      - "Block all incoming connections" in "Network" > "Firewall" > "Options". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
+```zsh
+sudo bash includes/enablePF-mscp.sh
+
+sudo pfctl -a '*' -sr | grep "block drop in all"
+# Should output smt like "block drop in all" i.e. default deny all incoming
+sudo pfctl -s info
+# Should give output
+
+# FileVault
+sudo fdesetup status
+```
+ 18. Note from previous step: one might encounter these two warnings.
+      - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
+      - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
+ 19. The script should yield 100% compliance by running option 2, then option 1.
+```zsh
+sudo zsh ~/Desktop/Profiles/macos_security-tahoe/build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
+```
+ 20. Restart the device at this point.
+ 21. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
+
+**Note** If unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
+
+**Note** Run `pip list` after this section. There should only be `pip` and `setuptools` in global python environment.
+
+## 4. AIDE Setup
+ 1. Install AIDE via MacPorts: `sudo port install aide`.
+ 2. Edit the [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
+```zsh
+sudo vi /opt/local/etc/aide/aide.conf
+# Paste content
+```
+ 3. Initialize database:
+```zsh
+sudo aide --init -L info
+#    INFO: read new entries from disk (limit: '(none)', root prefix: '')
+#    INFO: write new entries to database: file:/opt/local/var/lib/aide/aide.db.new
+#    ...
+# AIDE successfully initialized database.
+# New AIDE database written to /opt/local/var/lib/aide/aide.db.new
+# Number of entries:	~9000
+# End timestamp: ... (run time 0m 0-5s)
+# INFO: exit AIDE with exit code '0'    <--- 0 = no error
+```
+ 4. Move database into history directory & verify database:
+```zsh
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
+ls -lh /opt/local/var/lib/aide/aide.db
+# Expected: ~1.5MB
+```
+ 5. Test installation:
+```zsh
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
+# Number of entries:	~9000
+...
+# End timestamp: ... (run time 0m 0-5s)
+```
+```zsh
+sudo touch /Library/LaunchAgents/com.test.aide.plist
+
+sudo aide --check
+# AIDE found differences between database and filesystem!!
+# Summary:
+#   Total number of entries:	...
+#   Added entries:		1
+#   Removed entries:		0
+#   Changed entries:		1
+
+# ---------------------------------------------------
+# Added entries:
+# ---------------------------------------------------
+
+# f++++++++++++: /Library/LaunchAgents/com.test.aide.plist
+```
+```zsh
+# Run whenever finished installing legitimate apps/processes
+sudo aide --update
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
+
+echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
+sudo aide --check
+#  Added entries:		0
+#  Removed entries:		0
+#  Changed entries:		1
+```
+ 6. Ensure that database cannot be tampered:
+```zsh
+ls -la /opt/local/var/lib/aide/aide.db
+# -rw-------  1 root  admin  1454621 Jan 16 10:22 /opt/local/var/lib/aide/aide.db
+```
+ 7. Cleanup after testing for the next manual/on-demand scan.
+```bash
+sudo rm /Library/LaunchAgents/com.test.aide.plist
+sudo aide --update
+sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
+
+sudo aide --check
+# AIDE found NO differences between database and filesystem. Looks okay!!
+```
+
+### A) Quick Reference
+
+| Task | Command |
+|------|---------|
+| Manual check | `sudo aide --check` |
+| Update after changes | `sudo aide --update && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
+| Re-initialize | `sudo aide --init && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
+| View log | `sudo cat /opt/local/var/log/aide/aide.log` |
+| Verbose check | `sudo aide --check -L info` |
+
+### B) Monitored Directories
+
+| Category | Paths | Reason |
+|----------|-------|-----|
+| LaunchDaemons | `/Library/LaunchDaemons` | Root-level persistence |
+| LaunchAgents | `/Library/LaunchAgents`, `~/Library/LaunchAgents` | User-level persistence |
+| Applications | `/Applications` | App bundle integrity |
+| MacPorts | `/opt/local/bin`, `/opt/local/sbin` | Binary integrity |
+| Shell configs | `~/.zshrc`, `~/.bash_profile`, etc. | Backdoor detection |
+| SSH | `~/.ssh/config`, `/etc/ssh` | SSH hijacking |
+| sudoers | `/etc/sudoers`, `/etc/sudoers.d` | Privilege escalation |
+| PAM | `/etc/pam.d` | Auth bypass |
+| Auth plugins | `/Library/Security` | Login interception |
+| Scripting | `/Library/ScriptingAdditions` | AppleScript injection |
+| Input methods | `/Library/Input Methods` | Keylogging |
+| Screen savers | `/Library/Screen Savers` | Code execution |
+| Santa config | `/var/db/santa` | Security tool tampering |
+
+## 5. DNS Setup
 ### A) Hosts File
  - Append [StevenBlack/hosts](https://github.com/StevenBlack/hosts) into `hosts`.
 ```zsh
@@ -248,318 +549,6 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
 <sup>https://00f.net/2019/11/03/stop-using-low-dns-ttls/</sup></br>
 <sup>https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html</sup>
 <sup>https://wiki.archlinux.org/title/Unbound</sup>
-
-## 3. Santa Setup
- 1. Install the updated release from Northpole on [GitHub](https://github.com/northpolesec/santa/releases).
- 2. Grant permissions:
-    - "Login Items & Extensions" > "App Background Activity" add Santa.app
-    - "Login Items & Extensions" > "Extensions" > "By App" > toggle "Santa"
-    - "Login Items & Extensions" > "Extensions" > "By Category" > "Endpoint Security Extensions" toggle Santa daemon
-    - "Privacy" > "Full Disk Access" enable Santa Endpoint Security Extension (close and re-open Settings app after Santa install)
- 3. Quit and re-open the terminal and check if Santa is running:
-```zsh
-sudo santactl doctor
-```
- 4. Add a custom [FAA policy](https://github.com/crimsonpython24/macos-setup/blob/master/policies/faa_policy.plist):
-```zsh
-sudo mkdir -p /var/db/santa
-sudo vi /var/db/santa/faa_policy.plist
-# Paste content
-
-sudo chmod 644 /var/db/santa/faa_policy.plist
-sudo chown root:wheel /var/db/santa/faa_policy.plist
-```
- 5. Download the [Configuration Profile](https://github.com/crimsonpython24/macos-setup/blob/master/policies/santa.mobileconfig). Install this profile first before the mSCP config (section 4) because NIST configurations block adding new profiles.
-```zsh
-cd ~/Desktop && mkdir Profiles && cd Profiles
-vi santa.mobileconfig
-# Paste content
-
-sudo open santa.mobileconfig
-```
- 6. Blocking application example (a selected list of banned apps are [in the repo](https://github.com/crimsonpython24/macos-setup/blob/master/policies/prefs/santa_base.json)):
-```zsh
-santactl fileinfo /System/Applications/Dictionary.app 
-# Path                   : /System/Applications/Dictionary.app/Contents/MacOS/Dictionary
-# SHA-256                : 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-# SHA-1                  : 0cb8cb1f8d31650f4d770d633aacce9b2fcc5901
-# Bundle Name            : Dictionary
-# Bundle Version         : 294
-# Bundle Version Str     : 2.3.0
-# Signing ID             : platform:com.apple.Dictionary
-
-# Use signing ID (will not change even with app update)
-sudo santactl rule \
-  --block \
-  --signingid \
-  --identifier platform:com.apple.Dictionary
-
-santactl fileinfo /System/Applications/Dictionary.app 
-# Rule                   : Blocked (SigningID)
-```
-```zsh
-# Deprecated appproach: sha-256
-sudo santactl rule --block/--remove --sha256 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f 
-# Added/Removed rule for SHA-256: 85f755c92afe93a52034d498912be0ab475020d615bcbe2ac024babbeed4439f
-```
- 7. Certain files should be blocked by the FAA policy (because they should be immutable after being initialized), e.g.,
-```zsh
-# Will be created in section 7
-cat ~/.ssh/github_ed25519
-```
- 8. When importing/exporting rules, use:
-```zsh
-sudo santactl rule --export santa1.json
-```
-
-## 4. mSCP Setup
- > [!IMPORTANT]
- > The NIST security compliance project does **not** modify any system behavior on its own. It generates a script that validates if the system reflects the selected policy, and creates a configuration profile that implements some changes.
-
- > Unless otherwise specified, all commands here should be ran at the project base (`macos_security-*/`).
-
- 1. Download the [repository](https://github.com/usnistgov/macos_security) and the [provided YAML config](https://github.com/crimsonpython24/macos-setup/blob/master/policies/cnssi-1253_cust.yaml) in this repo, or a config from [NIST baselines](https://github.com/usnistgov/macos_security/tree/main/baselines).
-```zsh
-cd macos_security-tahoe/build
-mkdir baselines && cd baselines
-vi cnssi-1253_cust.yaml
-# Paste content
-```
- 2. Ensure that the `macos_security-*` branch downloaded matches the OS version, e.g., `macos_security-tahoe`.
- 3. Install dependencies, recommended within a virtual environment; after this step, warren will also gain paths to python3.14 and its corresponding pip package.
-```zsh
-sudo port install python314
-sudo port select --set python python314 && sudo port select --set python3 python314
-# For admin's shell
-echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.zshrc
-echo 'export PATH=/opt/local/bin:/opt/local/sbin:$PATH' >> ~/.bash_profile
-source ~/.zshrc
-source ~/.bash_profile
-
-python --version
-# Python 3.14.2
-python3 --version
-# Python 3.14.2
-
-sudo port install py314-pip 
-sudo port select --set pip pip314 && sudo port select --set pip3 pip314
-rehash (zsh) / hash -r (bash)
-pip --version
-# pip 25.3
-pip3 --version
-# pip 25.3
-```
-```zsh
-cd ~/Desktop/Profiles/macos_security-tahoe
-python3 -m venv venv
-source venv/bin/activate
-python3 -m pip install --upgrade pip && pip3 install pyyaml xlwt
-```
- 4. Small tangent: also check if MacPort libs also work in warren.
-```zsh
-su - warren
-python3 --version
-# Python 3.14.2
-python --version
-# Python 3.14.2
-pip3 --version
-# pip 25.3 from /opt/local/Library
-pip --version
-# pip 25.3 from /opt/local/Library
-exit
-```
- 5. Remove `warren` from the FileVault authorized users group to ensure that only admin can unlock FV (so during double-auth, the first login must be admin to unlock FileVault before logging in as warren):
-```zsh
-sudo fdesetup list
-sudo fdesetup remove -user warren
-sudo fdesetup list
-# Should only have admin
-```
- 6. Load custom ODVs (organization-defined values)
-```zsh
-cd ~/Desktop/Profiles/macos_security-tahoe
-
-cat > custom/rules/pwpolicy_minimum_length_enforce.yaml << 'EOF'
-odv:
-  custom: 12
-EOF
-
-cat > custom/rules/pwpolicy_account_lockout_enforce.yaml << 'EOF'
-odv:
-  custom: 5
-EOF
-
-cat > custom/rules/system_settings_screensaver_ask_for_password_delay_enforce.yaml << 'EOF'
-odv:
-  custom: 0
-EOF
-```
- 7. Generate the configuration file (there should be a `*.mobileconfig` and a `*_compliance.sh` file). Note: do not use root for `generate_guidance.py` as it may affect non-root users. The python script will ask for permissions itself (repeat running the script even if it kills itself; it will eventually get all permissions it needs).
-```zsh
-python3 scripts/generate_guidance.py \
-        -P \
-        -s \
-        -p \
-    build/baselines/cnssi-1253_cust.yaml
-```
- 8. If there is a previous configuration profile installed, remove it in Settings.app first. Run the compliance script.
-```zsh
-sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
- 9. First select option 2 in the script, then option 1 to see the report. Skip option 3 in this step. The compliance percentage should be around 18%. Exit the script.
- 10. Install the configuration profile in the Settings app:
-```zsh
-sudo open build/cnssi-1253_cust/mobileconfigs/unsigned/cnssi-1253_cust.mobileconfig
-```
- 11. After installing the profile, one way to verify that ODVs are working is to go to "Lock Screen" in Settings and check if "Require password after screen saver begins..." is set to "immediately", as this guide overwrites NIST guideline's default value for that field.
- 12. Run the compliance script again (step 7) with options 2, then 1 in that order, i.e., always run a new compliance scan when settings changed. The script should now yield ~80% compliance.
-```zsh
-sudo zsh build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
- 13. Run option 3 and go through all scripts (select `y` for all settings) to apply settings not covered by the configuration profile. There are a handful of them.
- 14. Exit the script first to ensure that sudo access persists (it is shortened in the new CNSSI profile).
- 15. Run options 2 and 1 yet again. The compliance percentage should be about 96%. At this point, running option 3 will not do anything, because it does everything it can already, and the script will automatically return to the main menu.
- 16. Run option 2, copy the outputs, and find all rules that are still failing. Usually it is these two:
-```zsh
-os_firewall_default_deny_require
-system_settings_filevault_enforce
-```
- 17. Go inside Settings and manually toggle these two options:
-      - Enable "Filevault" under "Privacy and Security" > "Security". Wait until the encryption finishes.
-      - "Block all incoming connections" in "Network" > "Firewall" > "Options". Further ensure that `pf` firewall and FileVault are enabled (ALF is enabled by default):
-```zsh
-ls includes/enablePF-mscp.sh
-sudo bash includes/enablePF-mscp.sh
-
-sudo pfctl -a '*' -sr | grep "block drop in all"
-# Should output smt like "block drop in all" i.e. default deny all incoming
-sudo pfctl -s info
-# Should give output
-
-# FileVault
-sudo fdesetup status
-```
- 18. Note from previous step: one might encounter these two warnings.
-      - "No ALTQ support in kernel" / "ALTQ related functions disabled": ALTQ is a legacy traffic shaping feature that has been disabled in modern macOS, which does not affect pf firewall at all.
-      - "pfctl: DIOCGETRULES: Invalid argument": this occurs when pfctl queries anchors that do not support certain operations, but custom rules in this guide are still loaded (can still see `block drop in all`).
- 19. The script should yield 100% compliance by running option 2, then option 1.
- 20. Restart the device at this point.
- 21. After restart, run the compliance script to verify that everything works. If `system_settings_bluetooth_sharing_disable` fails, it can simply be remediated by running option 3; or since it is already disabled in the Settings app, one can safely ignore it.
-```zsh
-sudo zsh ~/Desktop/Profiles/macos_security-tahoe/build/cnssi-1253_cust/cnssi-1253_cust_compliance.sh
-```
-
-**Note** If unwanted banners show up, remove the corresponding files with `sudo rm -rf /Library/Security/PolicyBanner.*`
-
-**Note** Run `pip list` after this section. There should only be `pip` and `setuptools` in global python environment.
-
-## 5. AIDE Setup
- 1. Install AIDE via MacPorts: `sudo port install aide`.
- 2. Edit the [configuration file](https://github.com/crimsonpython24/macos-setup/blob/master/policies/aide.conf):
-```zsh
-sudo vi /opt/local/etc/aide/aide.conf
-# Paste content
-```
- 3. Initialize database:
-```zsh
-sudo aide --init -L info
-#    INFO: read new entries from disk (limit: '(none)', root prefix: '')
-#    INFO: write new entries to database: file:/opt/local/var/lib/aide/aide.db.new
-#    ...
-# AIDE successfully initialized database.
-# New AIDE database written to /opt/local/var/lib/aide/aide.db.new
-# Number of entries:	~9000
-# End timestamp: ... (run time 0m 0-5s)
-# INFO: exit AIDE with exit code '0'    <--- 0 = no error
-```
- 4. Move database into history directory & verify database:
-```zsh
-sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
-
-ls -lh /opt/local/var/lib/aide/aide.db
-# Expected: ~1.5MB
-```
- 5. Test installation:
-```zsh
-sudo aide --check
-# AIDE found NO differences between database and filesystem. Looks okay!!
-# Number of entries:	~9000
-...
-# End timestamp: ... (run time 0m 0-5s)
-```
-```zsh
-sudo touch /Library/LaunchAgents/com.test.aide.plist
-
-sudo aide --check
-# AIDE found differences between database and filesystem!!
-# Summary:
-#   Total number of entries:	...
-#   Added entries:		1
-#   Removed entries:		0
-#   Changed entries:		1
-
-# ---------------------------------------------------
-# Added entries:
-# ---------------------------------------------------
-
-# f++++++++++++: /Library/LaunchAgents/com.test.aide.plist
-```
-```zsh
-# Run whenever finished installing legitimate apps/processes
-sudo aide --update
-sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
-
-sudo aide --check
-# AIDE found NO differences between database and filesystem. Looks okay!!
-
-echo "modified" | sudo tee /Library/LaunchAgents/com.test.aide.plist
-sudo aide --check
-#  Added entries:		0
-#  Removed entries:		0
-#  Changed entries:		1
-```
- 6. Ensure that database cannot be tampered:
-```zsh
-ls -la /opt/local/var/lib/aide/aide.db
-# -rw-------  1 root  admin  1454621 Jan 16 10:22 /opt/local/var/lib/aide/aide.db
-```
- 7. Cleanup after testing for the next manual/on-demand scan.
-```bash
-sudo rm /Library/LaunchAgents/com.test.aide.plist
-sudo aide --update
-sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
-
-sudo aide --check
-# AIDE found NO differences between database and filesystem. Looks okay!!
-```
-
-### A) Quick Reference
-
-| Task | Command |
-|------|---------|
-| Manual check | `sudo aide --check` |
-| Update after changes | `sudo aide --update && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
-| Re-initialize | `sudo aide --init && sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db` |
-| View log | `sudo cat /opt/local/var/log/aide/aide.log` |
-| Verbose check | `sudo aide --check -L info` |
-
-### B) Monitored Directories
-
-| Category | Paths | Reason |
-|----------|-------|-----|
-| LaunchDaemons | `/Library/LaunchDaemons` | Root-level persistence |
-| LaunchAgents | `/Library/LaunchAgents`, `~/Library/LaunchAgents` | User-level persistence |
-| Applications | `/Applications` | App bundle integrity |
-| MacPorts | `/opt/local/bin`, `/opt/local/sbin` | Binary integrity |
-| Shell configs | `~/.zshrc`, `~/.bash_profile`, etc. | Backdoor detection |
-| SSH | `~/.ssh/config`, `/etc/ssh` | SSH hijacking |
-| sudoers | `/etc/sudoers`, `/etc/sudoers.d` | Privilege escalation |
-| PAM | `/etc/pam.d` | Auth bypass |
-| Auth plugins | `/Library/Security` | Login interception |
-| Scripting | `/Library/ScriptingAdditions` | AppleScript injection |
-| Input methods | `/Library/Input Methods` | Keylogging |
-| Screen savers | `/Library/Screen Savers` | Code execution |
-| Santa config | `/var/db/santa` | Security tool tampering |
 
 ## 6. Application Install
  > [!NOTE]
