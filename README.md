@@ -293,6 +293,7 @@ sudo aide --check
 ...
 # End timestamp: ... (run time 0m 0-5s)
 ```
+ 6. Test modifying watched directories:
 ```zsh
 sudo touch /Library/LaunchAgents/com.test.aide.plist
 
@@ -313,6 +314,7 @@ sudo aide --check
 ```zsh
 # Run whenever finished installing legitimate apps/processes
 sudo aide --update
+# New AIDE database written to /opt/local/var/lib/aide/aide.db.new
 sudo mv /opt/local/var/lib/aide/aide.db.new /opt/local/var/lib/aide/aide.db
 
 sudo aide --check
@@ -324,12 +326,12 @@ sudo aide --check
 #  Removed entries:		0
 #  Changed entries:		1
 ```
- 6. Ensure that database cannot be tampered:
+ 7. Ensure that database exists:
 ```zsh
 ls -la /opt/local/var/lib/aide/aide.db
 # -rw-------  1 root  admin  1454621 Jan 16 10:22 /opt/local/var/lib/aide/aide.db
 ```
- 7. Cleanup after testing for the next manual/on-demand scan.
+ 8. Cleanup after testing for the next manual/on-demand scan.
 ```bash
 sudo rm /Library/LaunchAgents/com.test.aide.plist
 sudo aide --update
@@ -353,19 +355,12 @@ sudo aide --check
 
 | Category | Paths | Reason |
 |----------|-------|-----|
-| LaunchDaemons | `/Library/LaunchDaemons` | Root-level persistence |
-| LaunchAgents | `/Library/LaunchAgents`, `~/Library/LaunchAgents` | User-level persistence |
-| Applications | `/Applications` | App bundle integrity |
-| MacPorts | `/opt/local/bin`, `/opt/local/sbin` | Binary integrity |
+| Startup | `/Library/LaunchDaemons`, `/Library/LaunchAgents` | Root-level persistence |
+| GPG | `/opt/local/bin/gpg2`, `/opt/local/bin/gpg2-agent` | GPG integrity |
 | Shell configs | `~/.zshrc`, `~/.bash_profile`, etc. | Backdoor detection |
-| SSH | `~/.ssh/config`, `/etc/ssh` | SSH hijacking |
-| sudoers | `/etc/sudoers`, `/etc/sudoers.d` | Privilege escalation |
+| SSH | `/Users/*/.ssh/*` | SSH hijacking |
 | PAM | `/etc/pam.d` | Auth bypass |
-| Auth plugins | `/Library/Security` | Login interception |
-| Scripting | `/Library/ScriptingAdditions` | AppleScript injection |
-| Input methods | `/Library/Input Methods` | Keylogging |
-| Screen savers | `/Library/Screen Savers` | Code execution |
-| Santa config | `/var/db/santa` | Security tool tampering |
+| User apps | `/Users/*/Library/Application Support/*` | Securing app data |
 
 ## 5. DNS Setup
 ### A) Hosts File
@@ -378,8 +373,8 @@ curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts | sudo tee
  > Some VPN applications override DNS settings on connect; may need to reconfigure VPN and make it use the local DNS server (change DNS to 127.0.0.1).
  > No need to configure DNSSEC in this step; it will be handled with Unbound.
 
- 1. Install DNSCrypt with `sudo port install dnscrypt-proxy` and load it on startup with `sudo port load dnscrypt-proxy`.
-    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound` and let it run at startup with `sudo port load unbound`.
+ 1. Install DNSCrypt with `sudo port install dnscrypt-proxy`. Do not load the port just yet, this will be done later.
+    - Because there will be no Internet connection until the end of this section, also install Unbound with `sudo port install unbound`, and do not load it yet.
     - Also copy the [DNSCrypt config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/dnscrypt-proxy.toml) and [Unbound config](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) beforehand.
     - Then, update DNS server settings to point to 127.0.0.1 ("Network" > Wi-Fi or Eth > Current network "Details" > DNS tab).
  2. Find DNSCrypt's installation location with `port contents dnscrypt-proxy` to get configuration files' path.
@@ -456,8 +451,8 @@ scutil --dns | head -10
 ### C) Unbound
  > The original guide uses `dnsmasq`; however, Dnsmasq will not load `ad` (authenticated data) flag in DNS queries if an entry is cached. Hence this section is replaced with unbound to achieve both caching and auth.
 
- 1. Unbound should already be installed in 2(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
- 2. Copy the configurations stored from 2(B) ([here](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) once again) into Unbound:
+ 1. Unbound should already be installed in 5(B). If not, set DNS back to 192.168.0.1, install Unbound, and then change back to 127.0.0.1.
+ 2. Copy the configurations stored from 5(B) ([here](https://github.com/crimsonpython24/macos-setup/blob/master/dns/unbound.conf) once again) into Unbound:
 ```zsh
 sudo vi /opt/local/etc/unbound/unbound.conf
 # Paste content
@@ -489,7 +484,6 @@ dig @127.0.0.1 dnssec.works
 
 # Test without DNS argument - should still go through 127.0.0.1#53 with `ad` flag
 dig dnssec.works
-# ;; SERVER: 127.0.0.1#53(127.0.0.1)
 
 # Test DNSSEC validation - should fail
 dig @127.0.0.1 fail01.dnssec.works
@@ -521,16 +515,12 @@ dig DNSKEY archlinux.org
 # archlinux.org.		3600	IN	SOA	hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010201 86400 10800 3600000 3600
 ```
 ```zsh
-dig DNSKEY dnssec.works
+dig DNSKEY dnsviz.net
+dig DNSKEY dnssec-debugger.verisignlabs.com
 # ;; Got answer:
-# ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 65193
+# ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: xxxxx
 # ;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
-# 
-# ;; QUESTION SECTION:
-# ;dnssec.works.			IN	DNSKEY
-# 
-# ;; ANSWER SECTION:
-# dnssec.works.		4965	IN	DNSKEY	257 3 8 AwEAAa+YwrBlCwfJzwmsSK87hKFAm+yz0...
+...
 ```
 
 **Note** Debugging commands:
@@ -554,7 +544,7 @@ One might have to quit and restart Safari (while testing) with `killall Safari`.
  > [!NOTE]
  > Although this section applies to `warren`, it is more convenient to run the script inside `admin` because `warren` is not in the sudoers group (and hence cannot run `sudo` commands), and `admin` cannot read/write warren's files because `admin` is not `root`. This is the same note as in section 1.
 
- > Install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter the binaries or miss the binaries' persistence after they are installed.
+ > When actually installing apps after following this guide, install BlockBlock, KnockKnock, and Little Snitch in this order. It prevents having to re-filter app binaries or miss binaries' persistence after the three tools are installed.
 
  1. Ensure that warren is not an admin (so apps should write to `/Users/warren/Library/`):
 ```zsh
@@ -595,6 +585,8 @@ ls -led /Library/StartupItems
 ```zsh
 # use -a instead of +a
 sudo chmod -a "user:warren deny add_subdirectory,add_file,writeattr,writeextattr,delete,delete_child" /Library/LaunchAgents
+# ls -led /Library/LaunchAgents
+# drwxr-xr-x  3 root  wheel  96 Jan 18 20:08 /Library/LaunchAgents
 ```
  5. When installing application for warren, make sure to create the directory `/Users/warren/Applications` (i.e., `~/Applications`) and drag-and-drop apps there. The "Applications" folder on Finder's sidebar points to `/Applications` (i.e., root). As such, user apps will store files to `~/Library`.
 
